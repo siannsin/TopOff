@@ -327,22 +327,22 @@ final class MenuBarViewModel: ObservableObject {
         updateIconState()
     }
 
-    func runCleanup() {
+    func runCleanup(deepPruneAll: Bool = false) {
         guard !isRunning else { return }
 
         Task {
             isRunning = true
-            statusMessage = "Cleaning up..."
+            statusMessage = deepPruneAll ? "Deep pruning Homebrew cache..." : "Cleaning up..."
 
             do {
-                lastCleanupResult = try await brewService.cleanup()
+                lastCleanupResult = try await brewService.cleanup(deepPruneAll: deepPruneAll)
                 statusMessage = nil
 
                 let message: String
                 if let result = lastCleanupResult, !result.freedSpace.isEmpty {
-                    message = "Freed \(result.freedSpace)"
+                    message = deepPruneAll ? "Deep prune freed \(result.freedSpace)" : "Freed \(result.freedSpace)"
                 } else {
-                    message = "Nothing to clean up"
+                    message = deepPruneAll ? "No Homebrew cache to prune" : "Nothing to clean up"
                 }
                 notificationManager.showCompletionNotification(success: true, message: message)
             } catch {
@@ -352,6 +352,11 @@ final class MenuBarViewModel: ObservableObject {
 
             isRunning = false
         }
+    }
+
+    func runDeepCachePrune() {
+        guard !isRunning, promptForDeepCachePrune() else { return }
+        runCleanup(deepPruneAll: true)
     }
 
     @discardableResult
@@ -398,6 +403,20 @@ final class MenuBarViewModel: ObservableObject {
         }
         alert.alertStyle = .informational
         alert.addButton(withTitle: "Retry with Admin")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    private func promptForDeepCachePrune() -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "Run Deep Cache Prune?"
+        alert.informativeText = """
+        This will run brew cleanup --prune=all and delete all Homebrew cached downloads.
+
+        Installed apps and command line tools stay installed, but Homebrew may need to download files again later.
+        """
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Run Deep Prune")
         alert.addButton(withTitle: "Cancel")
         return alert.runModal() == .alertFirstButtonReturn
     }

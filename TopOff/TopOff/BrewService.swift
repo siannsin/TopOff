@@ -505,12 +505,19 @@ final class BrewService {
         return String(scalars)
     }
 
-    func cleanup() async throws -> CleanupResult {
+    static func cleanupArguments(deepPruneAll: Bool) -> [String] {
+        deepPruneAll ? ["cleanup", "--prune=all"] : ["cleanup"]
+    }
+
+    func cleanup(deepPruneAll: Bool = false) async throws -> CleanupResult {
         guard let brewPath = brewPath else {
             throw BrewError.brewNotFound
         }
 
-        let output = try await runCommand(brewPath, arguments: ["cleanup"])
+        let output = try await runCommand(
+            brewPath,
+            arguments: Self.cleanupArguments(deepPruneAll: deepPruneAll)
+        )
         return parseCleanupOutput(output)
     }
 

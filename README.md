@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ihazgithub/TopOff/releases/latest/download/TopOff-v1.8.1.dmg">Download TopOff for macOS</a>
+  <a href="https://github.com/ihazgithub/TopOff/releases/latest/download/TopOff-v1.8.2.dmg">Download TopOff for macOS</a>
 </p>
 
 If you use Homebrew, you have probably forgotten to run `brew update && brew upgrade` for weeks at a time. TopOff checks quietly in the background, shows outdated packages from the menu bar, and lets you update with one click.
@@ -28,6 +28,7 @@ If you use Homebrew, you have probably forgotten to run `brew update && brew upg
 - **Selective updates** — Update or skip individual packages
 - **Greedy mode** — Optionally include apps that handle their own updates (Chrome, Slack, etc.) in both scheduled checks and upgrades
 - **Auto cleanup** — Automatically runs `brew cleanup` after upgrades to free disk space
+- **Deep cache prune** — Manually run `brew cleanup --prune=all` with a confirmation step when you want to reclaim more Homebrew cache space
 - **Admin retry for protected packages** — If a cask needs admin access, TopOff prompts for your password and retries automatically
 - **Update history** — View recently updated packages with version changes
 - **Configurable check interval** — Check every hour, 4 hours (default), 12 hours, 24 hours, or manually
@@ -53,7 +54,7 @@ The menu bar icon tells you at a glance if updates are available:
 
 ### Download (Recommended)
 
-1. Download the [latest DMG](https://github.com/ihazgithub/TopOff/releases/latest/download/TopOff-v1.8.1.dmg)
+1. Download the [latest DMG](https://github.com/ihazgithub/TopOff/releases/latest/download/TopOff-v1.8.2.dmg)
 2. Open the DMG and drag TopOff to your Applications folder
 3. **First launch:** macOS will block the app since it's not notarized. To open it:
    - Go to **System Settings → Privacy & Security**

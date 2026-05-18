@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.8.2 — May 2026
+
+### Improvements
+
+- **Manual Deep Cache Prune** — Added a deliberate, confirmation-protected option to run `brew cleanup --prune=all` without changing the default Auto Cleanup behavior
+- **Always-available manual cleanup** — Standard cleanup can now be run from Options at any time
+
+---
+
 ## v1.8.1 — May 2026
 
 ### Improvements

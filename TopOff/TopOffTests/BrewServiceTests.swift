@@ -279,4 +279,9 @@ final class BrewServiceTests: XCTestCase {
             ]
         )
     }
+
+    func testCleanupArgumentsKeepStandardCleanupAsDefault() {
+        XCTAssertEqual(BrewService.cleanupArguments(deepPruneAll: false), ["cleanup"])
+        XCTAssertEqual(BrewService.cleanupArguments(deepPruneAll: true), ["cleanup", "--prune=all"])
+    }
 }

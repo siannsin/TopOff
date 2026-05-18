@@ -67,14 +67,6 @@ struct TopOffApp: App {
             }
             .disabled(viewModel.isRunning)
 
-            // Manual cleanup button (only when auto cleanup is off)
-            if !viewModel.autoCleanupEnabled {
-                Button("Clean Up") {
-                    viewModel.runCleanup()
-                }
-                .disabled(viewModel.isRunning)
-            }
-
             Button("Check for Updates") {
                 Task {
                     await viewModel.checkForUpdates()
@@ -110,6 +102,22 @@ struct TopOffApp: App {
             Menu("Options") {
                 Toggle("Launch at Login", isOn: $viewModel.launchAtLogin)
                 Toggle("Auto Cleanup", isOn: $viewModel.autoCleanupEnabled)
+                    .help("Runs standard brew cleanup after successful updates.")
+
+                Button("Run Standard Cleanup") {
+                    viewModel.runCleanup()
+                }
+                .disabled(viewModel.isRunning)
+                .help("Runs brew cleanup now.")
+
+                Button("Deep Cache Prune…") {
+                    viewModel.runDeepCachePrune()
+                }
+                .disabled(viewModel.isRunning)
+                .help("Asks before running brew cleanup --prune=all.")
+
+                Divider()
+
                 Toggle("Greedy Mode", isOn: $viewModel.greedyModeEnabled)
                     .help("Includes apps with built-in auto-update in both checks and upgrades, such as Chrome, Slack, and VS Code.")
 
