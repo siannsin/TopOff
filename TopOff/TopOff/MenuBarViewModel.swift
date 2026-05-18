@@ -69,6 +69,11 @@ final class MenuBarViewModel: ObservableObject {
             UserDefaults.standard.set(autoCleanupEnabled, forKey: "autoCleanupEnabled")
         }
     }
+    @Published var autoCleanupStyle: AutoCleanupStyle {
+        didSet {
+            autoCleanupStyle.save()
+        }
+    }
     @Published var greedyModeEnabled: Bool {
         didSet {
             UserDefaults.standard.set(greedyModeEnabled, forKey: "greedyModeEnabled")
@@ -105,6 +110,7 @@ final class MenuBarViewModel: ObservableObject {
         } else {
             self.autoCleanupEnabled = UserDefaults.standard.bool(forKey: "autoCleanupEnabled")
         }
+        self.autoCleanupStyle = AutoCleanupStyle.stored()
         self.greedyModeEnabled = UserDefaults.standard.bool(forKey: "greedyModeEnabled")
         spinnerFrames = Self.generateSpinnerFrames()
         loadUpdateHistory()
@@ -169,8 +175,7 @@ final class MenuBarViewModel: ObservableObject {
 
                 // Run cleanup if auto cleanup is enabled
                 if autoCleanupEnabled {
-                    statusMessage = "Cleaning up..."
-                    lastCleanupResult = try? await brewService.cleanup()
+                    lastCleanupResult = try? await runAutoCleanup()
                 }
 
                 let remainingCount = visibleOutdatedPackages.count
@@ -202,8 +207,7 @@ final class MenuBarViewModel: ObservableObject {
                         let completedResult = try await finalizeUpdateResult(result, greedy: greedy)
 
                         if autoCleanupEnabled {
-                            statusMessage = "Cleaning up..."
-                            lastCleanupResult = try? await brewService.cleanup()
+                            lastCleanupResult = try? await runAutoCleanup()
                         }
 
                         let remainingCount = visibleOutdatedPackages.count
@@ -267,8 +271,7 @@ final class MenuBarViewModel: ObservableObject {
 
                 // Run cleanup if auto cleanup is enabled
                 if autoCleanupEnabled {
-                    statusMessage = "Cleaning up..."
-                    lastCleanupResult = try? await brewService.cleanup()
+                    lastCleanupResult = try? await runAutoCleanup()
                 }
 
                 statusMessage = nil
@@ -297,8 +300,7 @@ final class MenuBarViewModel: ObservableObject {
                         addToHistory(result)
 
                         if autoCleanupEnabled {
-                            statusMessage = "Cleaning up..."
-                            lastCleanupResult = try? await brewService.cleanup()
+                            lastCleanupResult = try? await runAutoCleanup()
                         }
 
                         statusMessage = nil
@@ -357,6 +359,15 @@ final class MenuBarViewModel: ObservableObject {
     func runDeepCachePrune() {
         guard !isRunning, promptForDeepCachePrune() else { return }
         runCleanup(deepPruneAll: true)
+    }
+
+    func setAutoCleanupStyle(_ style: AutoCleanupStyle) {
+        guard style != autoCleanupStyle else { return }
+        if style == .deepPruneAll && !promptForAutomaticDeepCachePrune() {
+            return
+        }
+
+        autoCleanupStyle = style
     }
 
     @discardableResult
@@ -421,6 +432,20 @@ final class MenuBarViewModel: ObservableObject {
         return alert.runModal() == .alertFirstButtonReturn
     }
 
+    private func promptForAutomaticDeepCachePrune() -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "Use Deep Cache Prune Automatically?"
+        alert.informativeText = """
+        Auto Cleanup will run brew cleanup --prune=all after successful updates.
+
+        This can reclaim more disk space by deleting Homebrew cached downloads. Installed apps and command line tools stay installed, but Homebrew may need to download files again later.
+        """
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "Use Deep Prune")
+        alert.addButton(withTitle: "Keep Standard")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
     private func extractErrorOutput(from error: Error) -> String {
         if let brewError = error as? BrewError {
             switch brewError {
@@ -457,6 +482,11 @@ final class MenuBarViewModel: ObservableObject {
 
     private func updateCandidatePackages() -> [OutdatedPackage] {
         Self.uniquePackages(visibleOutdatedPackages)
+    }
+
+    private func runAutoCleanup() async throws -> CleanupResult {
+        statusMessage = autoCleanupStyle.deepPruneAll ? "Deep pruning Homebrew cache..." : "Cleaning up..."
+        return try await brewService.cleanup(deepPruneAll: autoCleanupStyle.deepPruneAll)
     }
 
     nonisolated static func uniquePackages(_ source: [OutdatedPackage]) -> [OutdatedPackage] {

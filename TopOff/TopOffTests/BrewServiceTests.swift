@@ -284,4 +284,24 @@ final class BrewServiceTests: XCTestCase {
         XCTAssertEqual(BrewService.cleanupArguments(deepPruneAll: false), ["cleanup"])
         XCTAssertEqual(BrewService.cleanupArguments(deepPruneAll: true), ["cleanup", "--prune=all"])
     }
+
+    func testAutoCleanupStyleDefaultsToStandardCleanup() {
+        let suiteName = "topoff-tests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        XCTAssertEqual(AutoCleanupStyle.stored(in: defaults), .standard)
+        XCTAssertFalse(AutoCleanupStyle.stored(in: defaults).deepPruneAll)
+    }
+
+    func testAutoCleanupStyleCanPersistDeepPruneAll() {
+        let suiteName = "topoff-tests-\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        AutoCleanupStyle.deepPruneAll.save(in: defaults)
+
+        XCTAssertEqual(AutoCleanupStyle.stored(in: defaults), .deepPruneAll)
+        XCTAssertTrue(AutoCleanupStyle.stored(in: defaults).deepPruneAll)
+    }
 }

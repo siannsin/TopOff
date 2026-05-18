@@ -1,5 +1,18 @@
 # Changelog
 
+## v1.8.3 — May 2026
+
+### Improvements
+
+- **Optional Auto Cleanup deep prune** — Power users can now set Auto Cleanup to run `brew cleanup --prune=all` after successful updates; standard cleanup remains the default
+- **Cleaner Cleanup menu** — Cleanup actions now live under a dedicated Options → Cleanup submenu with the deep-prune auto style tucked away as an advanced choice
+
+### Fixes
+
+- **Launchpad icon rendering** — Updated the app icon assets so TopOff keeps rounded transparent corners on macOS Sequoia Launchpad
+
+---
+
 ## v1.8.2 — May 2026
 
 ### Improvements

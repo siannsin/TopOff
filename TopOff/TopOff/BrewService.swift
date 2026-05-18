@@ -114,6 +114,32 @@ struct CleanupResult {
     let timestamp: Date
 }
 
+enum AutoCleanupStyle: String, CaseIterable, Identifiable {
+    case standard
+    case deepPruneAll
+
+    static let userDefaultsKey = "autoCleanupStyle"
+
+    var id: String { rawValue }
+
+    var deepPruneAll: Bool {
+        self == .deepPruneAll
+    }
+
+    static func stored(in defaults: UserDefaults = .standard) -> AutoCleanupStyle {
+        guard let rawValue = defaults.string(forKey: userDefaultsKey),
+              let style = AutoCleanupStyle(rawValue: rawValue) else {
+            return .standard
+        }
+
+        return style
+    }
+
+    func save(in defaults: UserDefaults = .standard) {
+        defaults.set(rawValue, forKey: Self.userDefaultsKey)
+    }
+}
+
 @MainActor
 final class BrewService {
     let brewPath: String?

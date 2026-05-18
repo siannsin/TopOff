@@ -102,19 +102,35 @@ struct TopOffApp: App {
             Menu("Options") {
                 Toggle("Launch at Login", isOn: $viewModel.launchAtLogin)
                 Toggle("Auto Cleanup", isOn: $viewModel.autoCleanupEnabled)
-                    .help("Runs standard brew cleanup after successful updates.")
+                    .help("Runs cleanup after successful updates. Cleanup style can be changed under Cleanup.")
 
-                Button("Run Standard Cleanup") {
-                    viewModel.runCleanup()
-                }
-                .disabled(viewModel.isRunning)
-                .help("Runs brew cleanup now.")
+                Menu("Cleanup") {
+                    Button("Run Standard Cleanup") {
+                        viewModel.runCleanup()
+                    }
+                    .disabled(viewModel.isRunning)
+                    .help("Runs brew cleanup now.")
 
-                Button("Deep Cache Prune…") {
-                    viewModel.runDeepCachePrune()
+                    Button("Deep Cache Prune…") {
+                        viewModel.runDeepCachePrune()
+                    }
+                    .disabled(viewModel.isRunning)
+                    .help("Asks before running brew cleanup --prune=all.")
+
+                    Divider()
+
+                    Menu("Auto Cleanup Style") {
+                        Button("\(viewModel.autoCleanupStyle == .standard ? "✓ " : "")Standard Cleanup") {
+                            viewModel.setAutoCleanupStyle(.standard)
+                        }
+                        .help("Auto Cleanup runs brew cleanup after successful updates.")
+
+                        Button("\(viewModel.autoCleanupStyle == .deepPruneAll ? "✓ " : "")Deep Cache Prune") {
+                            viewModel.setAutoCleanupStyle(.deepPruneAll)
+                        }
+                        .help("Auto Cleanup runs brew cleanup --prune=all after successful updates.")
+                    }
                 }
-                .disabled(viewModel.isRunning)
-                .help("Asks before running brew cleanup --prune=all.")
 
                 Divider()
 
