@@ -85,7 +85,9 @@ The menu bar icon tells you at a glance if updates are available:
 All preferences are available under the **Options** submenu:
 
 - **Launch at Login** — Start TopOff when you log in
-- **Auto Cleanup** — Automatically runs `brew cleanup` after upgrades (on by default). Disable to use the manual Clean Up button instead.
+- **Auto Cleanup** — Automatically runs standard `brew cleanup` after upgrades (on by default)
+- **Run Standard Cleanup** — Manually run `brew cleanup` any time
+- **Deep Cache Prune…** — Manually run `brew cleanup --prune=all` after a confirmation step. This removes Homebrew cached downloads to reclaim more disk space, but does not uninstall apps or command line tools.
 - **Greedy Mode** — Always check and update everything, including apps that auto-update themselves (off by default — see [Greedy Mode explained](#whats-the-difference-between-update-all-and-greedy))
 - **Check Interval** — How often TopOff checks for outdated packages:
 - **View Update History** — See recently updated packages with version changes
