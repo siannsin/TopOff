@@ -99,7 +99,7 @@ final class MenuBarViewModel: ObservableObject {
     private var iconAnimationTimer: Timer?
     private var spinnerFrames: [NSImage] = []
     private var spinnerFrameIndex = 0
-    private var initialCheckSucceeded = false
+    @Published private var initialCheckSucceeded = false
 
     init() {
         self.launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLogin")
