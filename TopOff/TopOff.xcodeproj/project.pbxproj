@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		736074C5941826D1C8AAE572 /* MenuBarViewModelSkipListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C5AE0699146D3EB24865A6 /* MenuBarViewModelSkipListTests.swift */; };
+		82CB87E23243B30181118979 /* SkippedPackagesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E2D3B324E165ECD0159C419 /* SkippedPackagesView.swift */; };
 		A1B2C3D4E5F60001 /* TopOffApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60011 /* TopOffApp.swift */; };
 		A1B2C3D4E5F60002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60012 /* Assets.xcassets */; };
 		A1B2C3D4E5F60003 /* BrewService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60015 /* BrewService.swift */; };
@@ -33,6 +34,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		4E2D3B324E165ECD0159C419 /* SkippedPackagesView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SkippedPackagesView.swift; sourceTree = "<group>"; };
 		602F71524F09E1230078D225 /* DisplayVersion.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DisplayVersion.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60010 /* TopOff.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TopOff.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1B2C3D4E5F60011 /* TopOffApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TopOffApp.swift; sourceTree = "<group>"; };
@@ -94,6 +96,7 @@
 				A1B2C3D4E5F60013 /* TopOff.entitlements */,
 				A1B2C3D4E5F60014 /* Info.plist */,
 				602F71524F09E1230078D225 /* DisplayVersion.swift */,
+				4E2D3B324E165ECD0159C419 /* SkippedPackagesView.swift */,
 			);
 			path = TopOff;
 			sourceTree = "<group>";
@@ -225,6 +228,7 @@
 				A1B2C3D4E5F60009 /* HistoryView.swift in Sources */,
 				A1B2C3D4E5F60007 /* UpdateChecker.swift in Sources */,
 				C5ABE3636DCEED4330162E0C /* DisplayVersion.swift in Sources */,
+				82CB87E23243B30181118979 /* SkippedPackagesView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
