@@ -826,4 +826,43 @@ final class BrewService {
         let packages = Self.parseUpgradeOutput(upgradeOutput)
         return UpdateResult(packages: packages, timestamp: Date())
     }
+
+    // MARK: - Askpass / FIFO
+
+    /// Cancel sentinel that the askpass script recognizes as "user cancelled".
+    static let askpassCancelSentinel = "__TOPOFF_CANCEL__"
+
+    /// Create a named pipe (FIFO) at `path` with mode 0600. The FIFO is the
+    /// transport for the user's password from TopOff to sudo's askpass program.
+    /// Throws on any mkfifo failure.
+    static func makeFIFO(at path: String) throws {
+        let result = mkfifo(path, 0o600)
+        if result != 0 {
+            let errnoCopy = errno
+            throw NSError(
+                domain: NSPOSIXErrorDomain,
+                code: Int(errnoCopy),
+                userInfo: [NSLocalizedDescriptionKey: "mkfifo failed at \(path)"]
+            )
+        }
+    }
+
+    /// Write the askpass shell script that, when invoked by sudo, reads exactly
+    /// one line from the FIFO and either prints it (success) or exits 1 (cancel).
+    /// The FIFO path is baked into the script literal — no env-var dependence.
+    static func writeAskpassScript(toPath scriptPath: String, fifoPath: String) throws {
+        let script = """
+        #!/bin/sh
+        RESULT=$(cat "\(fifoPath)")
+        if [ "$RESULT" = "\(askpassCancelSentinel)" ]; then
+          exit 1
+        fi
+        printf '%s\\n' "$RESULT"
+        """
+        try script.write(toFile: scriptPath, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes(
+            [.posixPermissions: 0o700],
+            ofItemAtPath: scriptPath
+        )
+    }
 }
