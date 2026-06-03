@@ -481,6 +481,16 @@ final class MenuBarViewModel: ObservableObject {
                 return output
             case .brewNotFound:
                 return ""
+            case .networkUnavailable(let output):
+                return output
+            case .diskFull(let output):
+                return output
+            case .commandLineToolsRequired(let output):
+                return output
+            case .brewBusy(let output):
+                return output
+            case .caskUnavailable(_, let output):
+                return output
             }
         }
         return error.localizedDescription

@@ -2,17 +2,54 @@ import Foundation
 
 enum BrewError: Error, LocalizedError {
     case brewNotFound
-    case commandFailed(String)
     case permissionDenied(String)
+    case commandFailed(String)
+
+    case networkUnavailable(String)
+    case diskFull(String)
+    case commandLineToolsRequired(String)
+    case brewBusy(String)
+    case caskUnavailable(packageName: String?, output: String)
 
     var errorDescription: String? {
         switch self {
         case .brewNotFound:
-            return "Homebrew not found. Please install Homebrew first."
-        case .commandFailed(let message):
-            return "Brew command failed: \(message)"
-        case .permissionDenied(let message):
-            return "Permission denied: \(message)"
+            return "Homebrew not installed"
+        case .permissionDenied:
+            return "Administrator access needed"
+        case .commandFailed:
+            return "Homebrew couldn't complete the update"
+        case .networkUnavailable:
+            return "Network connection issue"
+        case .diskFull:
+            return "Disk is full"
+        case .commandLineToolsRequired:
+            return "Command Line Tools are missing"
+        case .brewBusy:
+            return "Homebrew is busy"
+        case .caskUnavailable(let name, _):
+            return "\(name ?? "A package") is no longer available"
+        }
+    }
+
+    var recoverySuggestion: String? {
+        switch self {
+        case .brewNotFound:
+            return "Install Homebrew from brew.sh first."
+        case .permissionDenied:
+            return "Some packages need admin privileges. Try again — you'll be asked for your password."
+        case .commandFailed:
+            return "Run brew doctor in Terminal for a diagnosis."
+        case .networkUnavailable:
+            return "Check your internet and try again. If it persists, check System Settings → Network."
+        case .diskFull:
+            return "Free up space and try again. Run brew cleanup --prune=all from the Cleanup menu to reclaim cache."
+        case .commandLineToolsRequired:
+            return "Open Terminal and run xcode-select --install, then retry."
+        case .brewBusy:
+            return "Another Homebrew operation is running. Wait a moment and try again."
+        case .caskUnavailable:
+            return "Homebrew has removed it. Skip it from the menu to stop seeing it as outdated."
         }
     }
 }
