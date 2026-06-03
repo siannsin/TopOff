@@ -79,6 +79,16 @@ final class MenuBarViewModel: ObservableObject {
             UserDefaults.standard.set(greedyModeEnabled, forKey: "greedyModeEnabled")
         }
     }
+    @Published var rememberSkippedPackages: Bool {
+        didSet {
+            UserDefaults.standard.set(rememberSkippedPackages, forKey: "rememberSkippedPackages")
+        }
+    }
+    @Published var rememberedSkipList: Set<String> {
+        didSet {
+            saveRememberedSkipList()
+        }
+    }
 
     @Published var appUpdateInfo: AppUpdateInfo?
     @Published var isCheckingForAppUpdate = false
@@ -112,6 +122,8 @@ final class MenuBarViewModel: ObservableObject {
         }
         self.autoCleanupStyle = AutoCleanupStyle.stored()
         self.greedyModeEnabled = UserDefaults.standard.bool(forKey: "greedyModeEnabled")
+        self.rememberSkippedPackages = UserDefaults.standard.bool(forKey: "rememberSkippedPackages")
+        self.rememberedSkipList = Self.loadRememberedSkipList()
         spinnerFrames = Self.generateSpinnerFrames()
         loadUpdateHistory()
         UserDefaults.standard.removeObject(forKey: "packagesNeedingAttention")
@@ -783,6 +795,21 @@ final class MenuBarViewModel: ObservableObject {
             updateHistory = decoded
             lastUpdateResult = decoded.first
         }
+    }
+
+    private func saveRememberedSkipList() {
+        let sorted = rememberedSkipList.sorted()
+        if let data = try? JSONEncoder().encode(sorted) {
+            UserDefaults.standard.set(data, forKey: "rememberedSkipList")
+        }
+    }
+
+    private static func loadRememberedSkipList() -> Set<String> {
+        guard let data = UserDefaults.standard.data(forKey: "rememberedSkipList"),
+              let array = try? JSONDecoder().decode([String].self, from: data) else {
+            return []
+        }
+        return Set(array)
     }
 
 }

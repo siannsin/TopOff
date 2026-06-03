@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		736074C5941826D1C8AAE572 /* MenuBarViewModelSkipListTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7C5AE0699146D3EB24865A6 /* MenuBarViewModelSkipListTests.swift */; };
 		A1B2C3D4E5F60001 /* TopOffApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60011 /* TopOffApp.swift */; };
 		A1B2C3D4E5F60002 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60012 /* Assets.xcassets */; };
 		A1B2C3D4E5F60003 /* BrewService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60015 /* BrewService.swift */; };
@@ -47,6 +48,7 @@
 		A1B2C3D4E5F6001B /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HistoryView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60110 /* TopOffTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TopOffTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1B2C3D4E5F60111 /* BrewServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrewServiceTests.swift; sourceTree = "<group>"; };
+		A7C5AE0699146D3EB24865A6 /* MenuBarViewModelSkipListTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuBarViewModelSkipListTests.swift; sourceTree = "<group>"; };
 		B4CF3A0B84B985C4B3BE3D90 /* DisplayVersionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DisplayVersionTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -110,6 +112,7 @@
 			children = (
 				A1B2C3D4E5F60111 /* BrewServiceTests.swift */,
 				B4CF3A0B84B985C4B3BE3D90 /* DisplayVersionTests.swift */,
+				A7C5AE0699146D3EB24865A6 /* MenuBarViewModelSkipListTests.swift */,
 			);
 			path = TopOffTests;
 			sourceTree = "<group>";
@@ -231,6 +234,7 @@
 			files = (
 				A1B2C3D4E5F60101 /* BrewServiceTests.swift in Sources */,
 				AB5B4CA3CB11A98305FDF00A /* DisplayVersionTests.swift in Sources */,
+				736074C5941826D1C8AAE572 /* MenuBarViewModelSkipListTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
