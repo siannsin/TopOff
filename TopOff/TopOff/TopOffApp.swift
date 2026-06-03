@@ -35,7 +35,7 @@ struct TopOffApp: App {
                 let overflow = visible.count - displayPackages.count
 
                 ForEach(displayPackages) { package in
-                    Menu("\(package.name)  \(package.currentVersion) → \(package.latestVersion)") {
+                    Menu("\(package.name)  \(DisplayVersion.abbreviate(package.latestVersion))") {
                         Button("Update") {
                             viewModel.upgradePackage(package)
                         }
@@ -85,8 +85,16 @@ struct TopOffApp: App {
                     Text("Last Update (\(result.count) package\(result.count == 1 ? "" : "s")):")
                         .foregroundStyle(.secondary)
                     ForEach(result.packages) { package in
-                        Text("  \(package.name) \(package.oldVersion) → \(package.newVersion)")
-                            .font(.system(.body, design: .monospaced))
+                        HStack(spacing: 6) {
+                            Text("  \(package.name)")
+                                .fontWeight(.medium)
+                            Text(DisplayVersion.abbreviate(package.newVersion))
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: 320, alignment: .leading)
                     }
                 }
 
@@ -206,6 +214,6 @@ struct TopOffApp: App {
             marker = "✓"
         }
 
-        return "\(marker) \(item.name) \(item.currentVersion) → \(item.latestVersion)"
+        return "\(marker) \(item.name) \(DisplayVersion.abbreviate(item.currentVersion)) → \(DisplayVersion.abbreviate(item.latestVersion))"
     }
 }
