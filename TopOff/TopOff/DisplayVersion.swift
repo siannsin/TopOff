@@ -8,8 +8,8 @@ enum DisplayVersion {
 
     /// Returns `version` with any SHA-like segment shortened to 7 characters.
     /// A segment after a comma is treated as SHA-like if it is at least 8
-    /// characters long AND contains at least one lowercase hex letter
-    /// (`a`–`f`). Numeric-only build numbers are left untouched.
+    /// characters long AND contains at least one hex letter (`a`–`f` or
+    /// `A`–`F`). Numeric-only build numbers are left untouched.
     static func abbreviate(_ version: String) -> String {
         guard version.contains(",") else { return version }
 
