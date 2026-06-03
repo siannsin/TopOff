@@ -55,7 +55,7 @@ extension BrewError {
             "failure while executing",
             "password is required",
             "requires root",
-            "sudo",
+            "sudo: ",
             "insufficient permissions",
         ]) {
             return .permissionDenied(output)
