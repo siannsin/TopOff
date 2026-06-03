@@ -252,19 +252,13 @@ final class MenuBarViewModel: ObservableObject {
                         statusMessage = nil
                         updateProgress = nil
                         iconState = outdatedPackages.isEmpty ? .upToDate : .updatesAvailable
-                        let friendly = (error as? LocalizedError)
-                        let title = friendly?.errorDescription ?? "Update couldn't complete"
-                        let body  = friendly?.recoverySuggestion ?? "Try again, or run brew doctor in Terminal for diagnosis."
-                        notificationManager.showCompletionNotification(success: false, title: title, body: body)
+                        notifyFailure(error)
                     }
                 } else {
                     statusMessage = nil
                     updateProgress = nil
                     iconState = outdatedPackages.isEmpty ? .upToDate : .updatesAvailable
-                    let friendly = (error as? LocalizedError)
-                    let title = friendly?.errorDescription ?? "Update couldn't complete"
-                    let body  = friendly?.recoverySuggestion ?? "Try again, or run brew doctor in Terminal for diagnosis."
-                    notificationManager.showCompletionNotification(success: false, title: title, body: body)
+                    notifyFailure(error)
                 }
             }
 
@@ -341,18 +335,12 @@ final class MenuBarViewModel: ObservableObject {
                     } catch {
                         statusMessage = nil
                         updateIconState()
-                        let friendly = (error as? LocalizedError)
-                        let title = friendly?.errorDescription ?? "Update couldn't complete"
-                        let body  = friendly?.recoverySuggestion ?? "Try again, or run brew doctor in Terminal for diagnosis."
-                        notificationManager.showCompletionNotification(success: false, title: title, body: body)
+                        notifyFailure(error)
                     }
                 } else {
                     statusMessage = nil
                     updateIconState()
-                    let friendly = (error as? LocalizedError)
-                    let title = friendly?.errorDescription ?? "Update couldn't complete"
-                    let body  = friendly?.recoverySuggestion ?? "Try again, or run brew doctor in Terminal for diagnosis."
-                    notificationManager.showCompletionNotification(success: false, title: title, body: body)
+                    notifyFailure(error)
                 }
             }
 
@@ -389,10 +377,7 @@ final class MenuBarViewModel: ObservableObject {
                 notificationManager.showCompletionNotification(success: true, message: message)
             } catch {
                 statusMessage = nil
-                let friendly = (error as? LocalizedError)
-                let title = friendly?.errorDescription ?? "Cleanup couldn't complete"
-                let body  = friendly?.recoverySuggestion ?? "Try again, or run brew doctor in Terminal for diagnosis."
-                notificationManager.showCompletionNotification(success: false, title: title, body: body)
+                notifyFailure(error, fallbackTitle: "Cleanup couldn't complete")
             }
 
             isRunning = false
@@ -511,6 +496,13 @@ final class MenuBarViewModel: ObservableObject {
             }
         }
         return error.localizedDescription
+    }
+
+    private func notifyFailure(_ error: Error, fallbackTitle: String = "Update couldn't complete") {
+        let friendly = (error as? LocalizedError)
+        let title = friendly?.errorDescription ?? fallbackTitle
+        let body  = friendly?.recoverySuggestion ?? "Try again, or run brew doctor in Terminal for diagnosis."
+        notificationManager.showCompletionNotification(success: false, title: title, body: body)
     }
 
     private func updateIconState() {
