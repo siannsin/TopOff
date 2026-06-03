@@ -76,6 +76,18 @@ struct TopOffApp: App {
 
             Divider()
 
+            // Up-to-date confirmation
+            if viewModel.showsUpToDateConfirmation {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green.opacity(0.8))
+                    Text("All packages up to date")
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.leading, 12)
+                Divider()
+            }
+
             // Last Update Results
             if let result = viewModel.lastUpdateResult {
                 if result.isEmpty {
