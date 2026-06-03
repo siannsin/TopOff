@@ -772,11 +772,11 @@ final class BrewService {
 
             switch prompt {
             case .cancelled:
-                try? Self.writeToFIFO(fifoPath: fifoPath, content: "\(Self.askpassCancelSentinel)\n")
+                try? await Self.writeToFIFO(fifoPath: fifoPath, content: "\(Self.askpassCancelSentinel)\n")
                 _ = try? await runTask.value   // drain — sudo will fail
                 throw BrewError.commandFailed("Admin authentication cancelled by user.")
             case .submitted(let password):
-                try? Self.writeToFIFO(fifoPath: fifoPath, content: "\(password)\n")
+                try? await Self.writeToFIFO(fifoPath: fifoPath, content: "\(password)\n")
             }
 
             do {
@@ -795,12 +795,23 @@ final class BrewService {
     }
 
     /// Open the FIFO for writing and push a single line of content. Uses a
-    /// nonblocking open so we don't hang forever if the brew subprocess
-    /// finished before invoking askpass (in which case there's no reader and
-    /// our write has nowhere to land — that's fine, just no-op).
-    private static func writeToFIFO(fifoPath: String, content: String) throws {
-        // Brief wait loop so the askpass `cat` has a chance to open the FIFO
-        // for reading before we attempt the write. This is the normal case.
+    /// nonblocking open so we don't hang if the brew subprocess finished before
+    /// invoking askpass (in which case there's no reader and our write has
+    /// nowhere to land — silent no-op is fine, the runTask will return brew's
+    /// normal output).
+    ///
+    /// Async + `Task.sleep` is required: this is called from a `@MainActor`
+    /// context and a synchronous `usleep` would freeze the UI on the common
+    /// path where brew doesn't actually invoke sudo (formula upgrades, cached
+    /// sudo credentials), in which case askpass is never called, no reader
+    /// appears, and the whole 5-second poll budget is spent waiting.
+    ///
+    /// Known limitation: if the FIFO write times out AND askpass invokes
+    /// later, the brew subprocess can hang waiting on a writer that never
+    /// arrives. The 5-second budget is generous enough that this is a corner
+    /// case (sudo invokes askpass within ~50 ms in practice), and the user
+    /// can quit the app to recover.
+    private static func writeToFIFO(fifoPath: String, content: String) async throws {
         var fd: Int32 = -1
         for _ in 0..<50 {                          // up to 5 s total
             fd = open(fifoPath, O_WRONLY | O_NONBLOCK)
@@ -812,7 +823,7 @@ final class BrewService {
                     userInfo: [NSLocalizedDescriptionKey: "Failed to open FIFO for write: \(fifoPath)"]
                 )
             }
-            usleep(100_000)                         // 0.1 s
+            try? await Task.sleep(nanoseconds: 100_000_000)   // 0.1 s, yields the actor
         }
         guard fd >= 0 else { return }              // reader never appeared — no-op
         defer { close(fd) }
