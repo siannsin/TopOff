@@ -23,6 +23,7 @@
 		A1B2C3D4E5F60101 /* BrewServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60111 /* BrewServiceTests.swift */; };
 		AB5B4CA3CB11A98305FDF00A /* DisplayVersionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4CF3A0B84B985C4B3BE3D90 /* DisplayVersionTests.swift */; };
 		C5ABE3636DCEED4330162E0C /* DisplayVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 602F71524F09E1230078D225 /* DisplayVersion.swift */; };
+		E7ADB7B4A926EB060F6E9A47 /* AdminPasswordPromptWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18FD970D70069AC5CA2EA99B /* AdminPasswordPromptWindow.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -36,6 +37,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		18FD970D70069AC5CA2EA99B /* AdminPasswordPromptWindow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AdminPasswordPromptWindow.swift; sourceTree = "<group>"; };
 		4E2D3B324E165ECD0159C419 /* SkippedPackagesView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SkippedPackagesView.swift; sourceTree = "<group>"; };
 		602F71524F09E1230078D225 /* DisplayVersion.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DisplayVersion.swift; sourceTree = "<group>"; };
 		7E82337D72B586027C4FCC6C /* BrewErrorClassificationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BrewErrorClassificationTests.swift; sourceTree = "<group>"; };
@@ -102,6 +104,7 @@
 				602F71524F09E1230078D225 /* DisplayVersion.swift */,
 				4E2D3B324E165ECD0159C419 /* SkippedPackagesView.swift */,
 				A8A2E360C5F57BAF9697D3B4 /* BrewError+Classification.swift */,
+				18FD970D70069AC5CA2EA99B /* AdminPasswordPromptWindow.swift */,
 			);
 			path = TopOff;
 			sourceTree = "<group>";
@@ -236,6 +239,7 @@
 				C5ABE3636DCEED4330162E0C /* DisplayVersion.swift in Sources */,
 				82CB87E23243B30181118979 /* SkippedPackagesView.swift in Sources */,
 				51FDFB24EAFDEFE9D1FDAA1A /* BrewError+Classification.swift in Sources */,
+				E7ADB7B4A926EB060F6E9A47 /* AdminPasswordPromptWindow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
