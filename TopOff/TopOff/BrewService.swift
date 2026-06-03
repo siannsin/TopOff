@@ -850,11 +850,15 @@ final class BrewService {
     /// Write the askpass shell script that, when invoked by sudo, reads exactly
     /// one line from the FIFO and either prints it (success) or exits 1 (cancel).
     /// The FIFO path is baked into the script literal — no env-var dependence.
+    /// Both interpolated values are shell-single-quote-escaped so a hostile
+    /// path or sentinel can never break out of the quoted literal.
     static func writeAskpassScript(toPath scriptPath: String, fifoPath: String) throws {
+        let safeFifo = shellSingleQuoteEscape(fifoPath)
+        let safeSentinel = shellSingleQuoteEscape(askpassCancelSentinel)
         let script = """
         #!/bin/sh
-        RESULT=$(cat "\(fifoPath)")
-        if [ "$RESULT" = "\(askpassCancelSentinel)" ]; then
+        RESULT=$(cat \(safeFifo))
+        if [ "$RESULT" = \(safeSentinel) ]; then
           exit 1
         fi
         printf '%s\\n' "$RESULT"
@@ -864,5 +868,12 @@ final class BrewService {
             [.posixPermissions: 0o700],
             ofItemAtPath: scriptPath
         )
+    }
+
+    /// Wrap `value` in single quotes for safe interpolation into a shell
+    /// command. Any embedded `'` is escaped using the canonical
+    /// `'\''` (close, literal apostrophe, reopen) pattern.
+    private static func shellSingleQuoteEscape(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
     }
 }
