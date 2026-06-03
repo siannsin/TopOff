@@ -86,7 +86,7 @@ struct TopOffApp: App {
                         .foregroundStyle(.secondary)
                     ForEach(result.packages) { package in
                         HStack(spacing: 6) {
-                            Text("  \(package.name)")
+                            Text(package.name)
                                 .fontWeight(.medium)
                             Text(DisplayVersion.abbreviate(package.newVersion))
                                 .font(.callout)
@@ -94,13 +94,15 @@ struct TopOffApp: App {
                         }
                         .lineLimit(1)
                         .truncationMode(.tail)
+                        .padding(.leading, 12)
                         .frame(maxWidth: 320, alignment: .leading)
                     }
                 }
 
                 if let cleanup = viewModel.lastCleanupResult, !cleanup.freedSpace.isEmpty {
-                    Text("  Cleanup: Freed \(cleanup.freedSpace)")
+                    Text("Cleanup: Freed \(cleanup.freedSpace)")
                         .foregroundStyle(.secondary)
+                        .padding(.leading, 12)
                 }
 
                 Divider()
