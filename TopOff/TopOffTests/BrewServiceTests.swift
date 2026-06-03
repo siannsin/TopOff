@@ -20,11 +20,12 @@ final class BrewServiceTests: XCTestCase {
     }
 
     func testPermissionErrorDetectionForSudoPromptFailures() {
-        let service = BrewService()
-        XCTAssertTrue(
-            service.isPermissionError("sudo: a terminal is required to read the password"),
-            "Should detect non-TTY sudo prompt failures as permission errors"
-        )
+        let output = "sudo: a terminal is required to read the password"
+        if case .permissionDenied = BrewError.classify(output: output) {
+            // pass
+        } else {
+            XCTFail("Should detect non-TTY sudo prompt failures as permission errors")
+        }
     }
 
     func testAppUpdateCheckIntervalIsSixHours() {

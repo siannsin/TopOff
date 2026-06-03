@@ -712,15 +712,6 @@ final class BrewService {
         return try await runCommand(command, arguments: arguments)
     }
 
-    // MARK: - Permission Error Detection
-
-    func isPermissionError(_ output: String) -> Bool {
-        if case .permissionDenied = BrewError.classify(output: output) {
-            return true
-        }
-        return false
-    }
-
     // MARK: - Admin Privilege Execution
 
     private func createAskpassScript() throws -> String {

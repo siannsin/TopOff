@@ -217,7 +217,8 @@ final class MenuBarViewModel: ObservableObject {
                 updateProgress = nil
             } catch {
                 let errorOutput = extractErrorOutput(from: error)
-                if brewService.isPermissionError(errorOutput) && promptForAdminRetry(packageName: nil) {
+                let classified = BrewError.classify(output: errorOutput)
+                if case .permissionDenied = classified, promptForAdminRetry(packageName: nil) {
                     do {
                         statusMessage = "Retrying with admin privileges..."
                         let result = try await performUpdates(
@@ -251,13 +252,19 @@ final class MenuBarViewModel: ObservableObject {
                         statusMessage = nil
                         updateProgress = nil
                         iconState = outdatedPackages.isEmpty ? .upToDate : .updatesAvailable
-                        notificationManager.showCompletionNotification(success: false, message: error.localizedDescription)
+                        let friendly = (error as? LocalizedError)
+                        let title = friendly?.errorDescription ?? "Update couldn't complete"
+                        let body  = friendly?.recoverySuggestion ?? "Try again, or run brew doctor in Terminal for diagnosis."
+                        notificationManager.showCompletionNotification(success: false, title: title, body: body)
                     }
                 } else {
                     statusMessage = nil
                     updateProgress = nil
                     iconState = outdatedPackages.isEmpty ? .upToDate : .updatesAvailable
-                    notificationManager.showCompletionNotification(success: false, message: error.localizedDescription)
+                    let friendly = (error as? LocalizedError)
+                    let title = friendly?.errorDescription ?? "Update couldn't complete"
+                    let body  = friendly?.recoverySuggestion ?? "Try again, or run brew doctor in Terminal for diagnosis."
+                    notificationManager.showCompletionNotification(success: false, title: title, body: body)
                 }
             }
 
@@ -303,7 +310,8 @@ final class MenuBarViewModel: ObservableObject {
                 notificationManager.showCompletionNotification(success: true, message: message)
             } catch {
                 let errorOutput = extractErrorOutput(from: error)
-                if brewService.isPermissionError(errorOutput) && promptForAdminRetry(packageName: package.name) {
+                let classified = BrewError.classify(output: errorOutput)
+                if case .permissionDenied = classified, promptForAdminRetry(packageName: package.name) {
                     do {
                         statusMessage = "Retrying \(package.name) with admin privileges..."
                         let result = try await brewService.upgradePackageWithAdmin(package.name)
@@ -333,12 +341,18 @@ final class MenuBarViewModel: ObservableObject {
                     } catch {
                         statusMessage = nil
                         updateIconState()
-                        notificationManager.showCompletionNotification(success: false, message: error.localizedDescription)
+                        let friendly = (error as? LocalizedError)
+                        let title = friendly?.errorDescription ?? "Update couldn't complete"
+                        let body  = friendly?.recoverySuggestion ?? "Try again, or run brew doctor in Terminal for diagnosis."
+                        notificationManager.showCompletionNotification(success: false, title: title, body: body)
                     }
                 } else {
                     statusMessage = nil
                     updateIconState()
-                    notificationManager.showCompletionNotification(success: false, message: error.localizedDescription)
+                    let friendly = (error as? LocalizedError)
+                    let title = friendly?.errorDescription ?? "Update couldn't complete"
+                    let body  = friendly?.recoverySuggestion ?? "Try again, or run brew doctor in Terminal for diagnosis."
+                    notificationManager.showCompletionNotification(success: false, title: title, body: body)
                 }
             }
 
@@ -375,7 +389,10 @@ final class MenuBarViewModel: ObservableObject {
                 notificationManager.showCompletionNotification(success: true, message: message)
             } catch {
                 statusMessage = nil
-                notificationManager.showCompletionNotification(success: false, message: error.localizedDescription)
+                let friendly = (error as? LocalizedError)
+                let title = friendly?.errorDescription ?? "Cleanup couldn't complete"
+                let body  = friendly?.recoverySuggestion ?? "Try again, or run brew doctor in Terminal for diagnosis."
+                notificationManager.showCompletionNotification(success: false, title: title, body: body)
             }
 
             isRunning = false
