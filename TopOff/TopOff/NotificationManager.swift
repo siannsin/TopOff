@@ -41,4 +41,32 @@ class NotificationManager {
 
         UNUserNotificationCenter.current().add(request)
     }
+
+    func showCompletionNotification(success: Bool, title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+
+        if success {
+            content.body = body.isEmpty ? "All packages updated! 🎉" : body
+            content.sound = .default
+        } else {
+            content.body = body
+            content.sound = .defaultCritical
+        }
+
+        // Use custom notification icon if available
+        if let imageURL = Bundle.main.url(forResource: "DancingStickFigure", withExtension: "png") {
+            if let attachment = try? UNNotificationAttachment(identifier: "image", url: imageURL, options: nil) {
+                content.attachments = [attachment]
+            }
+        }
+
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString,
+            content: content,
+            trigger: nil
+        )
+
+        UNUserNotificationCenter.current().add(request)
+    }
 }
