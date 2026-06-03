@@ -1,5 +1,26 @@
 # Changelog
 
+## v2.0 — June 2026
+
+### Headline
+
+- **Now signed and notarized by Apple** — TopOff installs cleanly on first launch with no need to use System Settings → Privacy & Security → Open Anyway.
+
+### Improvements
+
+- **Native admin password prompt** — Replaces the old AppleScript dialog with a polished native window that shows the app icon, names the package that needs admin access, and supports up to three wrong-password retries with clear messaging.
+- **Persistent Skipped Packages** — Optional "Remember Skipped Packages" mode in Options keeps Skip choices across checks and restarts; a Manage window lets you remove saved skips at any time.
+- **Friendlier error messages** — Common Homebrew failures (network issues, disk full, missing Command Line Tools, busy lock files, removed casks) now surface as clear titles and actionable suggestions instead of raw CLI output.
+- **Cleaner menu rows** — Last Update entries show just the new version, with smart abbreviation for SHA-style cask versions so single rows can't push the menu wide. Package names use a refined typography hierarchy.
+- **"All packages up to date" confirmation** — When everything is current, the menu shows a subtle green checkmark line so the state is unambiguous.
+- **History view grouped by date** — Update history is now organized under Today / Yesterday / day-name / date headers, similar to Mail and Reminders.
+
+### Notes
+
+- Existing settings carry over; no manual migration needed.
+
+---
+
 ## v1.8.3 — May 2026
 
 ### Improvements
