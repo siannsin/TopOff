@@ -83,6 +83,9 @@ final class AdminPasswordPromptWindowController: NSWindowController {
 
 extension AdminPasswordPromptWindowController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
+        // May fire after finish() has already run (e.g. user clicked Cancel,
+        // which calls finish() which calls close() which posts this). The
+        // guard in finish() makes the second call a no-op.
         finish(with: .cancelled)
     }
 }
@@ -144,7 +147,6 @@ struct AdminPasswordPromptView: View {
             SecureField("Password", text: $viewModel.password)
                 .textFieldStyle(.roundedBorder)
                 .focused($passwordFocused)
-                .onSubmit { viewModel.submit() }
 
             HStack(spacing: 10) {
                 Button("Cancel") { viewModel.cancel() }
