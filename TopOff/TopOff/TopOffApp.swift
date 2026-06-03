@@ -161,6 +161,18 @@ struct TopOffApp: App {
 
                 Divider()
 
+                Toggle("Remember Skipped Packages", isOn: $viewModel.rememberSkippedPackages)
+                    .help("When on, Skip persists across checks and app restarts.")
+
+                if viewModel.rememberSkippedPackages || !viewModel.rememberedSkipList.isEmpty {
+                    Button("Manage Skipped Packages…") {
+                        openWindow(id: "skipped")
+                        NSApp.activate(ignoringOtherApps: true)
+                    }
+                }
+
+                Divider()
+
                 Picker("Check Interval", selection: $viewModel.checkInterval) {
                     Text("Every Hour").tag(3600.0 as TimeInterval)
                     Text("Every 4 Hours").tag(14400.0 as TimeInterval)
@@ -207,6 +219,13 @@ struct TopOffApp: App {
 
         Window("Update History", id: "history") {
             HistoryView()
+                .environmentObject(viewModel)
+        }
+        .windowResizability(.contentSize)
+        .defaultPosition(.center)
+
+        Window("Skipped Packages", id: "skipped") {
+            SkippedPackagesView()
                 .environmentObject(viewModel)
         }
         .windowResizability(.contentSize)
