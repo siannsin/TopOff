@@ -715,17 +715,10 @@ final class BrewService {
     // MARK: - Permission Error Detection
 
     func isPermissionError(_ output: String) -> Bool {
-        let keywords = [
-            "Permission denied",
-            "Operation not permitted",
-            "Failure while executing",
-            "password is required",
-            "requires root",
-            "sudo",
-            "insufficient permissions"
-        ]
-        let lowercased = output.lowercased()
-        return keywords.contains { lowercased.contains($0.lowercased()) }
+        if case .permissionDenied = BrewError.classify(output: output) {
+            return true
+        }
+        return false
     }
 
     // MARK: - Admin Privilege Execution
