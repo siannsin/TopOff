@@ -146,9 +146,10 @@ final class MenuBarViewModel: ObservableObject {
         }
     }
 
-    /// Visible outdated packages (excludes skipped)
+    /// Visible outdated packages (excludes both session skips and remembered skips)
     var visibleOutdatedPackages: [OutdatedPackage] {
-        outdatedPackages.filter { !skippedPackages.contains($0.name) }
+        let allSkipped = skippedPackages.union(rememberedSkipList)
+        return outdatedPackages.filter { !allSkipped.contains($0.name) }
     }
 
     /// True when the menu should render the subtle "All packages up to date"
@@ -344,7 +345,11 @@ final class MenuBarViewModel: ObservableObject {
     }
 
     func skipPackage(_ package: OutdatedPackage) {
-        skippedPackages.insert(package.name)
+        if rememberSkippedPackages {
+            rememberedSkipList.insert(package.name)
+        } else {
+            skippedPackages.insert(package.name)
+        }
         updateIconState()
     }
 
