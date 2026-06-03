@@ -37,7 +37,7 @@ final class MenuBarViewModelSkipListTests: XCTestCase {
     }
 
     func testSkipRoutesToRememberedWhenToggleOn() {
-        let vm = MenuBarViewModel()
+        let vm = MenuBarViewModel(skipInitialChecks: true)
         vm.rememberSkippedPackages = true
         vm.outdatedPackages = [OutdatedPackage(name: "chrome", currentVersion: "1.0", latestVersion: "2.0")]
 
@@ -49,7 +49,7 @@ final class MenuBarViewModelSkipListTests: XCTestCase {
     }
 
     func testSkipRoutesToSessionWhenToggleOff() {
-        let vm = MenuBarViewModel()
+        let vm = MenuBarViewModel(skipInitialChecks: true)
         vm.rememberSkippedPackages = false
         vm.outdatedPackages = [OutdatedPackage(name: "chrome", currentVersion: "1.0", latestVersion: "2.0")]
 
@@ -61,7 +61,7 @@ final class MenuBarViewModelSkipListTests: XCTestCase {
     }
 
     func testVisibleOutdatedExcludesUnionOfBothSkipSets() {
-        let vm = MenuBarViewModel()
+        let vm = MenuBarViewModel(skipInitialChecks: true)
         vm.rememberedSkipList = ["chrome"]
         vm.skippedPackages = ["figma"]
         vm.outdatedPackages = [

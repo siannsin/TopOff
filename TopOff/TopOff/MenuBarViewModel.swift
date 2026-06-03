@@ -111,7 +111,7 @@ final class MenuBarViewModel: ObservableObject {
     private var spinnerFrameIndex = 0
     @Published private var initialCheckSucceeded = false
 
-    init() {
+    init(skipInitialChecks: Bool = false) {
         self.launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLogin")
         self.checkInterval = UserDefaults.standard.object(forKey: "checkInterval") as? TimeInterval ?? 14400
         // Default to true for auto cleanup — UserDefaults.bool returns false if key doesn't exist
@@ -131,6 +131,8 @@ final class MenuBarViewModel: ObservableObject {
 
         // Start network monitor to handle connectivity restoration
         startNetworkMonitoring()
+
+        guard !skipInitialChecks else { return }
 
         // Check for updates on launch
         Task {
