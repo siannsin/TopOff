@@ -14,17 +14,11 @@ class NotificationManager {
         }
     }
 
-    func showCompletionNotification(success: Bool, message: String) {
+    private func sendCompletionNotification(success: Bool, title: String, body: String) {
         let content = UNMutableNotificationContent()
-        content.title = "TopOff"
-
-        if success {
-            content.body = message.isEmpty ? "All packages updated! 🎉" : message
-            content.sound = .default
-        } else {
-            content.body = "Update failed: \(message)"
-            content.sound = .defaultCritical
-        }
+        content.title = title
+        content.body = body
+        content.sound = success ? .default : .defaultCritical
 
         // Use custom notification icon if available
         if let imageURL = Bundle.main.url(forResource: "DancingStickFigure", withExtension: "png") {
@@ -42,31 +36,24 @@ class NotificationManager {
         UNUserNotificationCenter.current().add(request)
     }
 
-    func showCompletionNotification(success: Bool, title: String, body: String) {
-        let content = UNMutableNotificationContent()
-        content.title = title
-
+    func showCompletionNotification(success: Bool, message: String) {
+        let title = "TopOff"
+        let body: String
         if success {
-            content.body = body.isEmpty ? "All packages updated! 🎉" : body
-            content.sound = .default
+            body = message.isEmpty ? "All packages updated! 🎉" : message
         } else {
-            content.body = body
-            content.sound = .defaultCritical
+            body = "Update failed: \(message)"
         }
+        sendCompletionNotification(success: success, title: title, body: body)
+    }
 
-        // Use custom notification icon if available
-        if let imageURL = Bundle.main.url(forResource: "DancingStickFigure", withExtension: "png") {
-            if let attachment = try? UNNotificationAttachment(identifier: "image", url: imageURL, options: nil) {
-                content.attachments = [attachment]
-            }
+    func showCompletionNotification(success: Bool, title: String, body: String) {
+        let resolvedBody: String
+        if success {
+            resolvedBody = body.isEmpty ? "All packages updated! 🎉" : body
+        } else {
+            resolvedBody = body
         }
-
-        let request = UNNotificationRequest(
-            identifier: UUID().uuidString,
-            content: content,
-            trigger: nil
-        )
-
-        UNUserNotificationCenter.current().add(request)
+        sendCompletionNotification(success: success, title: title, body: resolvedBody)
     }
 }
