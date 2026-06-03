@@ -139,6 +139,13 @@ final class MenuBarViewModel: ObservableObject {
         outdatedPackages.filter { !skippedPackages.contains($0.name) }
     }
 
+    /// True when the menu should render the subtle "All packages up to date"
+    /// confirmation row — there are no outdated packages and at least one
+    /// successful check has completed since launch.
+    var showsUpToDateConfirmation: Bool {
+        initialCheckSucceeded && visibleOutdatedPackages.isEmpty && !isRunning
+    }
+
     func updateAll(greedy: Bool) {
         guard !isRunning else { return }
 
