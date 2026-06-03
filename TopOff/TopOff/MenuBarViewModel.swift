@@ -218,7 +218,7 @@ final class MenuBarViewModel: ObservableObject {
             } catch {
                 let errorOutput = extractErrorOutput(from: error)
                 let classified = BrewError.classify(output: errorOutput)
-                if case .permissionDenied = classified, promptForAdminRetry(packageName: nil) {
+                if case .permissionDenied = classified {
                     do {
                         statusMessage = "Retrying with admin privileges..."
                         let result = try await performUpdates(
@@ -305,7 +305,7 @@ final class MenuBarViewModel: ObservableObject {
             } catch {
                 let errorOutput = extractErrorOutput(from: error)
                 let classified = BrewError.classify(output: errorOutput)
-                if case .permissionDenied = classified, promptForAdminRetry(packageName: package.name) {
+                if case .permissionDenied = classified {
                     do {
                         statusMessage = "Retrying \(package.name) with admin privileges..."
                         let result = try await brewService.upgradePackageWithAdmin(package.name)
@@ -430,20 +430,6 @@ final class MenuBarViewModel: ObservableObject {
             isCheckingForAppUpdate = false
             appUpdateChecked = true
         }
-    }
-
-    private func promptForAdminRetry(packageName: String?) -> Bool {
-        let alert = NSAlert()
-        alert.messageText = "Administrator Access Required"
-        if let name = packageName {
-            alert.informativeText = "\"\(name)\" needs administrator access to update. This will open the macOS password dialog."
-        } else {
-            alert.informativeText = "Some packages need administrator access to update. This will open the macOS password dialog."
-        }
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "Retry with Admin")
-        alert.addButton(withTitle: "Cancel")
-        return alert.runModal() == .alertFirstButtonReturn
     }
 
     private func promptForDeepCachePrune() -> Bool {
