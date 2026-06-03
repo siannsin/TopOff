@@ -702,7 +702,12 @@ final class BrewService {
         onProgress: (@Sendable (String) -> Void)? = nil
     ) async throws -> String {
         if useAdmin {
-            return try await runCommandWithAdmin(command, arguments: arguments, onLine: onProgress)
+            return try await runCommandWithAdmin(
+                command,
+                arguments: arguments,
+                packageName: nil,
+                onLine: onProgress
+            )
         }
 
         if let onProgress {
@@ -714,79 +719,108 @@ final class BrewService {
 
     // MARK: - Admin Privilege Execution
 
-    private func createAskpassScript() throws -> String {
-        let script = """
-        #!/bin/sh
-        PROMPT="$1"
-        if [ -z "$PROMPT" ]; then
-          PROMPT="Administrator access is required to continue."
-        fi
-
-        PASSWORD=$(/usr/bin/osascript - "$PROMPT" <<'APPLESCRIPT'
-        on run argv
-            set promptText to "Password:"
-            if (count of argv) > 0 then
-                set promptText to item 1 of argv
-            end if
-            try
-                display dialog promptText with title "TopOff" default answer "" buttons {"Cancel", "OK"} default button "OK" with hidden answer
-                return text returned of result
-            on error number -128
-                error "User canceled" number 1
-            end try
-        end run
-        APPLESCRIPT
-        )
-
-        if [ $? -ne 0 ]; then
-          exit 1
-        fi
-
-        printf '%s\\n' "$PASSWORD"
-        """
-
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("topoff-askpass-\(UUID().uuidString).sh")
-        try script.write(to: url, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
-        return url.path
-    }
-
     private func runCommandWithAdmin(
         _ command: String,
         arguments: [String],
+        packageName: String? = nil,
         onLine: (@Sendable (String) -> Void)? = nil
     ) async throws -> String {
-        let askpassPath = try createAskpassScript()
-        defer { try? FileManager.default.removeItem(atPath: askpassPath) }
+        let maxAttempts = 3
+        var attempt = 0
+        var errorMessageForRetry: String? = nil
 
-        let environment = [
-            "SUDO_ASKPASS": askpassPath
-        ]
+        while attempt < maxAttempts {
+            attempt += 1
 
-        do {
-            if let onLine {
-                return try await runCommandStreaming(
+            let uuid = UUID().uuidString
+            let fifoPath = NSTemporaryDirectory() + "topoff-pw-\(uuid).fifo"
+            let scriptPath = NSTemporaryDirectory() + "topoff-askpass-\(uuid).sh"
+
+            try Self.makeFIFO(at: fifoPath)
+            try Self.writeAskpassScript(toPath: scriptPath, fifoPath: fifoPath)
+            defer {
+                try? FileManager.default.removeItem(atPath: fifoPath)
+                try? FileManager.default.removeItem(atPath: scriptPath)
+            }
+
+            // Kick off the brew subprocess in a background Task so it can run
+            // concurrently with the password prompt. The askpass script inside
+            // will block on the FIFO until we write to it.
+            let env = ["SUDO_ASKPASS": scriptPath]
+            let runTask: Task<String, Error> = Task {
+                if let onLine {
+                    return try await self.runCommandStreaming(
+                        command,
+                        arguments: arguments,
+                        extraEnvironment: env,
+                        onLine: onLine
+                    )
+                }
+                return try await self.runCommand(
                     command,
                     arguments: arguments,
-                    extraEnvironment: environment,
-                    onLine: onLine
-                )
-            } else {
-                return try await runCommand(
-                    command,
-                    arguments: arguments,
-                    extraEnvironment: environment
+                    extraEnvironment: env
                 )
             }
-        } catch BrewError.commandFailed(let output) {
-            let lowercased = output.lowercased()
-            if lowercased.contains("user canceled") ||
-               lowercased.contains("user cancelled") ||
-               lowercased.contains("no password was provided") {
+
+            // Present the password window. This await suspends until the user
+            // submits or cancels.
+            let prompt = await AdminPasswordPromptWindowController.present(
+                forPackage: packageName,
+                errorMessage: errorMessageForRetry
+            )
+
+            switch prompt {
+            case .cancelled:
+                try? Self.writeToFIFO(fifoPath: fifoPath, content: "\(Self.askpassCancelSentinel)\n")
+                _ = try? await runTask.value   // drain — sudo will fail
                 throw BrewError.commandFailed("Admin authentication cancelled by user.")
+            case .submitted(let password):
+                try? Self.writeToFIFO(fifoPath: fifoPath, content: "\(password)\n")
             }
-            throw BrewError.commandFailed(output)
+
+            do {
+                return try await runTask.value
+            } catch let BrewError.commandFailed(output) where Self.isAuthFailure(output) && attempt < maxAttempts {
+                errorMessageForRetry = "Incorrect password — please try again."
+                continue
+            } catch let BrewError.commandFailed(output) where Self.isAuthFailure(output) {
+                throw BrewError.commandFailed("Authentication failed after \(maxAttempts) attempts. Cancelled.")
+            }
+            // Non-auth errors propagate via the `try await runTask.value` above
+        }
+
+        // Should be unreachable due to throws in the loop
+        throw BrewError.commandFailed("Admin retry loop exhausted.")
+    }
+
+    /// Open the FIFO for writing and push a single line of content. Uses a
+    /// nonblocking open so we don't hang forever if the brew subprocess
+    /// finished before invoking askpass (in which case there's no reader and
+    /// our write has nowhere to land — that's fine, just no-op).
+    private static func writeToFIFO(fifoPath: String, content: String) throws {
+        // Brief wait loop so the askpass `cat` has a chance to open the FIFO
+        // for reading before we attempt the write. This is the normal case.
+        var fd: Int32 = -1
+        for _ in 0..<50 {                          // up to 5 s total
+            fd = open(fifoPath, O_WRONLY | O_NONBLOCK)
+            if fd >= 0 { break }
+            if errno != ENXIO {                    // ENXIO = no reader yet
+                throw NSError(
+                    domain: NSPOSIXErrorDomain,
+                    code: Int(errno),
+                    userInfo: [NSLocalizedDescriptionKey: "Failed to open FIFO for write: \(fifoPath)"]
+                )
+            }
+            usleep(100_000)                         // 0.1 s
+        }
+        guard fd >= 0 else { return }              // reader never appeared — no-op
+        defer { close(fd) }
+
+        if let data = content.data(using: .utf8) {
+            data.withUnsafeBytes { rawBuffer in
+                _ = write(fd, rawBuffer.baseAddress, rawBuffer.count)
+            }
         }
     }
 
@@ -808,6 +842,7 @@ final class BrewService {
             let output = try await runCommandWithAdmin(
                 brewPath,
                 arguments: upgradeArgs,
+                packageName: nil,
                 onLine: onProgress
             )
             upgradeOutputs.append(output)
@@ -822,7 +857,11 @@ final class BrewService {
             throw BrewError.brewNotFound
         }
 
-        let upgradeOutput = try await runCommandWithAdmin(brewPath, arguments: ["upgrade", name])
+        let upgradeOutput = try await runCommandWithAdmin(
+            brewPath,
+            arguments: ["upgrade", name],
+            packageName: name
+        )
         let packages = Self.parseUpgradeOutput(upgradeOutput)
         return UpdateResult(packages: packages, timestamp: Date())
     }
@@ -831,6 +870,15 @@ final class BrewService {
 
     /// Cancel sentinel that the askpass script recognizes as "user cancelled".
     static let askpassCancelSentinel = "__TOPOFF_CANCEL__"
+
+    /// Detect sudo's "wrong password" output patterns. Used by the admin retry
+    /// loop to decide whether to re-prompt vs. surface the error.
+    static func isAuthFailure(_ output: String) -> Bool {
+        let lower = output.lowercased()
+        return lower.contains("sorry, try again")
+            || lower.contains("incorrect password attempt")
+            || lower.contains("authentication failure")
+    }
 
     /// Create a named pipe (FIFO) at `path` with mode 0600. The FIFO is the
     /// transport for the user's password from TopOff to sudo's askpass program.
