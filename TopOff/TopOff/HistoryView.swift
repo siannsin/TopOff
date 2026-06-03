@@ -17,20 +17,22 @@ struct HistoryView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
             } else {
-                List(viewModel.updateHistory, id: \.timestamp) { result in
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(formatDate(result.timestamp))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        ForEach(result.packages) { package in
-                            Text("\(package.name) \(package.oldVersion) → \(package.newVersion)")
-                                .font(.system(.body, design: .monospaced))
+                List {
+                    ForEach(HistoryGrouping.groupHistory(viewModel.updateHistory)) { group in
+                        Section {
+                            ForEach(group.events, id: \.timestamp) { event in
+                                eventRow(event)
+                            }
+                        } header: {
+                            Text(group.title)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .textCase(.uppercase)
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    .padding(.vertical, 4)
                 }
-                .listStyle(.plain)
+                .listStyle(.inset)
             }
 
             Divider()
@@ -41,25 +43,43 @@ struct HistoryView: View {
             .disabled(viewModel.updateHistory.isEmpty)
             .padding()
         }
-        .frame(width: 320, height: 400)
+        .frame(width: 360, height: 500)
     }
 
-    private func formatDate(_ date: Date) -> String {
-        let calendar = Calendar.current
+    @ViewBuilder
+    private func eventRow(_ event: UpdateResult) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(timeLabel(for: event))
+                .font(.caption)
+                .foregroundStyle(.secondary)
 
-        if calendar.isDateInToday(date) {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "h:mm a"
-            return "Today at \(formatter.string(from: date))"
-        } else if calendar.isDateInYesterday(date) {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "h:mm a"
-            return "Yesterday at \(formatter.string(from: date))"
-        } else {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            formatter.timeStyle = .short
-            return formatter.string(from: date)
+            ForEach(event.packages) { package in
+                HStack(spacing: 8) {
+                    Text(package.name)
+                        .fontWeight(.medium)
+                    Spacer(minLength: 8)
+                    Text(versionTransition(package))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
         }
+        .padding(.vertical, 4)
+    }
+
+    private func timeLabel(for event: UpdateResult) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        let timeString = formatter.string(from: event.timestamp)
+        let count = event.packages.count
+        return "\(timeString) · \(count) package\(count == 1 ? "" : "s")"
+    }
+
+    private func versionTransition(_ package: UpgradedPackage) -> String {
+        let from = DisplayVersion.abbreviate(package.oldVersion)
+        let to   = DisplayVersion.abbreviate(package.newVersion)
+        return "\(from) → \(to)"
     }
 }
