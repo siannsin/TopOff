@@ -39,11 +39,11 @@ struct TopOffApp: App {
                         Button("Update") {
                             viewModel.upgradePackage(package)
                         }
+                        .disabled(viewModel.isRunning)
                         Button("Skip") {
                             viewModel.skipPackage(package)
                         }
                     }
-                    .disabled(viewModel.isRunning)
                 }
 
                 if overflow > 0 {
@@ -78,13 +78,8 @@ struct TopOffApp: App {
 
             // Up-to-date confirmation
             if viewModel.showsUpToDateConfirmation {
-                HStack(spacing: 6) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(.green.opacity(0.8))
-                    Text("All packages up to date")
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.leading, 12)
+                Label("All packages up to date", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.secondary)
                 Divider()
             }
 
@@ -97,17 +92,10 @@ struct TopOffApp: App {
                     Text("Last Update (\(result.count) package\(result.count == 1 ? "" : "s")):")
                         .foregroundStyle(.secondary)
                     ForEach(result.packages) { package in
-                        HStack(spacing: 6) {
-                            Text(package.name)
-                                .fontWeight(.medium)
-                            Text(DisplayVersion.abbreviate(package.newVersion))
+                        Text(package.name).fontWeight(.medium)
+                            + Text(" \(DisplayVersion.abbreviate(package.newVersion))")
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
-                        }
-                        .lineLimit(1)
-                        .truncationMode(.tail)
-                        .padding(.leading, 12)
-                        .frame(maxWidth: 320, alignment: .leading)
                     }
                 }
 
