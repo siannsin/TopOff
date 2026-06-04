@@ -178,7 +178,11 @@ enum AutoCleanupStyle: String, CaseIterable, Identifiable {
 }
 
 @MainActor
-final class BrewService {
+final class BrewService: @unchecked Sendable {
+    // Safe: the only instance property `brewPath` is a `let`, set once in init.
+    // All other state lives inside individual method calls. Marking Sendable
+    // lets us spawn detached Tasks that capture `self` so the brew subprocess
+    // can start spawning on a background thread while NSAlert blocks main.
     let brewPath: String?
 
     init() {
@@ -763,7 +767,11 @@ final class BrewService {
             // is the only reliable way to abort the whole pipeline.
             let processHolder = ProcessHolder()
             let env = ["SUDO_ASKPASS": scriptPath]
-            let runTask: Task<String, Error> = Task {
+            // `Task.detached` so the body doesn't inherit `@MainActor` — otherwise
+            // NSAlert.runModal blocks main actor, the Task body never gets a chance
+            // to run, and brew is never actually spawned until *after* the user
+            // dismisses the alert.
+            let runTask: Task<String, Error> = Task.detached {
                 if let onLine {
                     return try await self.runCommandStreaming(
                         command,
