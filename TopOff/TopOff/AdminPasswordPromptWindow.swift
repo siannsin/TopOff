@@ -38,12 +38,15 @@ final class AdminPasswordPromptWindowController: NSWindowController {
             errorMessage: errorMessage
         )
 
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 230),
-            styleMask: [.titled, .closable],
-            backing: .buffered,
-            defer: false
-        )
+        // NSHostingController + NSWindow(contentViewController:) lets SwiftUI
+        // manage its own intrinsic size and the window adapts. Constructing
+        // NSWindow with a hard-coded contentRect and assigning an NSHostingView
+        // separately causes an Update-Constraints death spiral when SwiftUI's
+        // preferred size doesn't match the window's fixed height.
+        let view = AdminPasswordPromptView(viewModel: viewModel)
+        let hostingController = NSHostingController(rootView: view)
+        let window = NSWindow(contentViewController: hostingController)
+        window.styleMask = [.titled, .closable]
         window.level = .modalPanel
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
@@ -58,9 +61,6 @@ final class AdminPasswordPromptWindowController: NSWindowController {
             self?.finish(with: .cancelled)
         }
         window.delegate = self
-
-        let view = AdminPasswordPromptView(viewModel: viewModel)
-        window.contentView = NSHostingView(rootView: view)
     }
 
     required init?(coder: NSCoder) {
