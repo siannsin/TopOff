@@ -603,7 +603,7 @@ final class BrewService {
         return CleanupResult(freedSpace: "", timestamp: Date())
     }
 
-    private func runCommand(
+    nonisolated private func runCommand(
         _ command: String,
         arguments: [String],
         extraEnvironment: [String: String] = [:],
@@ -644,7 +644,7 @@ final class BrewService {
         }
     }
 
-    private func runCommandStreaming(
+    nonisolated private func runCommandStreaming(
         _ command: String,
         arguments: [String],
         extraEnvironment: [String: String] = [:],
