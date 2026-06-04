@@ -151,3 +151,5 @@ If you use, fork, or build on TopOff, attribution to Thomas Haslam and a link to
 ## Credits
 
 Created by **Thomas Haslam**
+
+Distributed by **Malsah Labs LLC**
