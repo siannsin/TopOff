@@ -187,9 +187,8 @@ struct TopOffApp: App {
                 NSApplication.shared.terminate(nil)
             }
         } label: {
-            if let frame = viewModel.spinnerFrame,
-               viewModel.iconState == .checking || viewModel.iconState == .updating {
-                Image(nsImage: frame)
+            if viewModel.iconState == .checking || viewModel.iconState == .updating {
+                SpinningArrowsLabel()
             } else if viewModel.iconState.isCustomImage {
                 Image(viewModel.iconState.imageName)
             } else {
@@ -235,5 +234,25 @@ struct TopOffApp: App {
         }
 
         return "\(marker) \(item.name) \(DisplayVersion.abbreviate(item.currentVersion)) → \(DisplayVersion.abbreviate(item.latestVersion))"
+    }
+}
+
+/// Continuously-rotating arrows used as the menu-bar icon during checks /
+/// updates. Driven by SwiftUI's animation system instead of a timer that
+/// publishes new `NSImage`s onto the view-model. The previous timer-based
+/// approach fired `@Published` ticks every 100 ms, which made the whole
+/// menu tree reconcile constantly and broke hover-to-open-submenu behavior
+/// on the outdated package rows.
+private struct SpinningArrowsLabel: View {
+    @State private var rotation: Double = 0
+
+    var body: some View {
+        Image(systemName: "arrow.triangle.2.circlepath")
+            .rotationEffect(.degrees(rotation))
+            .onAppear {
+                withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
+                    rotation = -360
+                }
+            }
     }
 }

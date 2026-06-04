@@ -727,24 +727,17 @@ final class MenuBarViewModel: ObservableObject {
     }
 
     private func startIconAnimation() {
-        iconAnimationTimer?.invalidate()
-        spinnerFrameIndex = 0
-        spinnerFrame = spinnerFrames.first
-        let timer = Timer(timeInterval: 0.1, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self, !self.spinnerFrames.isEmpty else { return }
-                self.spinnerFrameIndex = (self.spinnerFrameIndex + 1) % self.spinnerFrames.count
-                self.spinnerFrame = self.spinnerFrames[self.spinnerFrameIndex]
-            }
-        }
-        RunLoop.main.add(timer, forMode: .common)
-        iconAnimationTimer = timer
+        // No-op. The previous timer-based approach published a new NSImage
+        // onto `spinnerFrame` every 100 ms, which made `objectWillChange`
+        // fire constantly and forced the menu tree to reconcile 10× per
+        // second — breaking NSMenu's hover-to-open-submenu delay. The
+        // visual spinning is now handled by a SwiftUI animation in the
+        // `SpinningArrowsLabel` view in `TopOffApp.swift`, which keeps its
+        // rotation state local and does not invalidate the menu content.
     }
 
     private func stopIconAnimation() {
-        iconAnimationTimer?.invalidate()
-        iconAnimationTimer = nil
-        spinnerFrame = nil
+        // No-op (see startIconAnimation).
     }
 
     private static func generateSpinnerFrames(frameCount: Int = 12, pointSize: CGFloat = 16) -> [NSImage] {
