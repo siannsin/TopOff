@@ -949,8 +949,10 @@ final class BrewService: @unchecked Sendable {
     static let askpassCancelSentinel = "__TOPOFF_CANCEL__"
 
     /// Detect sudo's "wrong password" output patterns. Used by the admin retry
-    /// loop to decide whether to re-prompt vs. surface the error.
-    static func isAuthFailure(_ output: String) -> Bool {
+    /// loop to decide whether to re-prompt vs. surface the error. Nonisolated
+    /// because it's a pure string check called from the background `runTask`
+    /// (Task.detached) on every output line.
+    nonisolated static func isAuthFailure(_ output: String) -> Bool {
         let lower = output.lowercased()
         return lower.contains("sorry, try again")
             || lower.contains("incorrect password attempt")
