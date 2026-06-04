@@ -771,21 +771,26 @@ final class BrewService: @unchecked Sendable {
             // NSAlert.runModal blocks main actor, the Task body never gets a chance
             // to run, and brew is never actually spawned until *after* the user
             // dismisses the alert.
+            //
+            // We always use the streaming variant so we can watch brew's output
+            // for sudo's "Sorry, try again" rejection in real time and kill brew
+            // immediately on auth failure. Without this, brew would continue making
+            // additional sudo calls (for cleanup/launchctl), each of which would
+            // block on an empty FIFO and deadlock the whole flow.
             let runTask: Task<String, Error> = Task.detached {
-                if let onLine {
-                    return try await self.runCommandStreaming(
-                        command,
-                        arguments: arguments,
-                        extraEnvironment: env,
-                        onProcess: { processHolder.set($0) },
-                        onLine: onLine
-                    )
+                let userOnLine = onLine
+                let watchedOnLine: @Sendable (String) -> Void = { line in
+                    if Self.isAuthFailure(line) {
+                        processHolder.terminate()
+                    }
+                    userOnLine?(line)
                 }
-                return try await self.runCommand(
+                return try await self.runCommandStreaming(
                     command,
                     arguments: arguments,
                     extraEnvironment: env,
-                    onProcess: { processHolder.set($0) }
+                    onProcess: { processHolder.set($0) },
+                    onLine: watchedOnLine
                 )
             }
 
