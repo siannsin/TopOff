@@ -603,7 +603,12 @@ final class BrewService {
         return CleanupResult(freedSpace: "", timestamp: Date())
     }
 
-    private func runCommand(_ command: String, arguments: [String], extraEnvironment: [String: String] = [:]) async throws -> String {
+    private func runCommand(
+        _ command: String,
+        arguments: [String],
+        extraEnvironment: [String: String] = [:],
+        onProcess: (@Sendable (Process) -> Void)? = nil
+    ) async throws -> String {
         try await withCheckedThrowingContinuation { continuation in
             let process = Process()
             let pipe = Pipe()
@@ -632,6 +637,7 @@ final class BrewService {
 
             do {
                 try process.run()
+                onProcess?(process)
             } catch {
                 continuation.resume(throwing: error)
             }
@@ -642,6 +648,7 @@ final class BrewService {
         _ command: String,
         arguments: [String],
         extraEnvironment: [String: String] = [:],
+        onProcess: (@Sendable (Process) -> Void)? = nil,
         onLine: @escaping @Sendable (String) -> Void
     ) async throws -> String {
         try await withCheckedThrowingContinuation { continuation in
@@ -689,6 +696,7 @@ final class BrewService {
 
             do {
                 try process.run()
+                onProcess?(process)
             } catch {
                 continuation.resume(throwing: error)
             }
@@ -746,6 +754,14 @@ final class BrewService {
             // Kick off the brew subprocess in a background Task so it can run
             // concurrently with the password prompt. The askpass script inside
             // will block on the FIFO until we write to it.
+            //
+            // `processHolder` captures the spawned Process so we can terminate
+            // it explicitly when the user cancels — brew can run multiple sudo
+            // calls per upgrade (install pkg, then cleanup of LaunchDaemons,
+            // etc.), and simply declining the first one leaves later sudo calls
+            // blocked forever on a FIFO with no writer. Killing the parent brew
+            // is the only reliable way to abort the whole pipeline.
+            let processHolder = ProcessHolder()
             let env = ["SUDO_ASKPASS": scriptPath]
             let runTask: Task<String, Error> = Task {
                 if let onLine {
@@ -753,13 +769,15 @@ final class BrewService {
                         command,
                         arguments: arguments,
                         extraEnvironment: env,
+                        onProcess: { processHolder.set($0) },
                         onLine: onLine
                     )
                 }
                 return try await self.runCommand(
                     command,
                     arguments: arguments,
-                    extraEnvironment: env
+                    extraEnvironment: env,
+                    onProcess: { processHolder.set($0) }
                 )
             }
 
@@ -772,8 +790,13 @@ final class BrewService {
 
             switch prompt {
             case .cancelled:
+                // Kill the brew subprocess first — declining the password is
+                // not enough because brew may issue further sudo calls.
+                processHolder.terminate()
+                // Then drain in case the askpass cat is still waiting on the
+                // FIFO; the sentinel will unblock it cleanly.
                 try? await Self.writeToFIFO(fifoPath: fifoPath, content: "\(Self.askpassCancelSentinel)\n")
-                _ = try? await runTask.value   // drain — sudo will fail
+                _ = try? await runTask.value
                 throw BrewError.commandFailed("Admin authentication cancelled by user.")
             case .submitted(let password):
                 try? await Self.writeToFIFO(fifoPath: fifoPath, content: "\(password)\n")
@@ -878,6 +901,28 @@ final class BrewService {
     }
 
     // MARK: - Askpass / FIFO
+
+    /// Thread-safe holder for a running Process. The `runCommand` /
+    /// `runCommandStreaming` callbacks invoke `set` from the background Task's
+    /// continuation closure; `runCommandWithAdmin` calls `terminate` from the
+    /// main actor on user cancel. Both sides synchronize through the lock.
+    private final class ProcessHolder: @unchecked Sendable {
+        private let lock = NSLock()
+        private var process: Process?
+
+        func set(_ process: Process) {
+            lock.lock()
+            self.process = process
+            lock.unlock()
+        }
+
+        func terminate() {
+            lock.lock()
+            let p = process
+            lock.unlock()
+            p?.terminate()
+        }
+    }
 
     /// Cancel sentinel that the askpass script recognizes as "user cancelled".
     static let askpassCancelSentinel = "__TOPOFF_CANCEL__"
