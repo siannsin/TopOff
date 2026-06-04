@@ -744,86 +744,75 @@ final class BrewService: @unchecked Sendable {
         while attempt < maxAttempts {
             attempt += 1
 
+            // Sequential design: prompt the user FIRST, then write the
+            // password to a per-attempt file (mode 0600) and spawn brew. The
+            // earlier parallel design (Task wrapping brew while NSAlert blocks
+            // the main actor) had multiple bugs — NSAlert.runModal blocking
+            // the main actor before brew could spawn, and FIFO-based password
+            // transport deadlocking because brew makes multiple sudo calls
+            // per cask install (preflight, install, postflight) and a FIFO
+            // only delivers its contents once. A regular file with the
+            // password lets every sudo invocation cat the same file and get
+            // the same password — wrong-password attempts cleanly exhaust
+            // sudo's 3-strike limit and brew exits with auth-failure output.
+            let prompt = await AdminPasswordPromptWindowController.present(
+                forPackage: packageName,
+                errorMessage: errorMessageForRetry
+            )
+
+            let password: String
+            switch prompt {
+            case .cancelled:
+                throw BrewError.commandFailed("Admin authentication cancelled by user.")
+            case .submitted(let p):
+                password = p
+            }
+
             let uuid = UUID().uuidString
-            let fifoPath = NSTemporaryDirectory() + "topoff-pw-\(uuid).fifo"
+            let passwordFile = NSTemporaryDirectory() + "topoff-pw-\(uuid).txt"
             let scriptPath = NSTemporaryDirectory() + "topoff-askpass-\(uuid).sh"
 
-            try Self.makeFIFO(at: fifoPath)
-            try Self.writeAskpassScript(toPath: scriptPath, fifoPath: fifoPath)
+            try password.write(toFile: passwordFile, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o600],
+                ofItemAtPath: passwordFile
+            )
+            try Self.writeAskpassScript(toPath: scriptPath, fifoPath: passwordFile)
             defer {
-                try? FileManager.default.removeItem(atPath: fifoPath)
+                try? FileManager.default.removeItem(atPath: passwordFile)
                 try? FileManager.default.removeItem(atPath: scriptPath)
             }
 
-            // Kick off the brew subprocess in a background Task so it can run
-            // concurrently with the password prompt. The askpass script inside
-            // will block on the FIFO until we write to it.
-            //
-            // `processHolder` captures the spawned Process so we can terminate
-            // it explicitly when the user cancels — brew can run multiple sudo
-            // calls per upgrade (install pkg, then cleanup of LaunchDaemons,
-            // etc.), and simply declining the first one leaves later sudo calls
-            // blocked forever on a FIFO with no writer. Killing the parent brew
-            // is the only reliable way to abort the whole pipeline.
+            // Watcher: if we see sudo's "Sorry, try again" or similar
+            // auth-failure output, kill brew immediately so the retry kicks
+            // in fast. If the watcher misses the marker (brew might swallow
+            // sudo's stderr), we still fall back to brew's natural exit —
+            // sudo's 3-retry limit ensures brew exits with auth output.
             let processHolder = ProcessHolder()
             let env = ["SUDO_ASKPASS": scriptPath]
-            // `Task.detached` so the body doesn't inherit `@MainActor` — otherwise
-            // NSAlert.runModal blocks main actor, the Task body never gets a chance
-            // to run, and brew is never actually spawned until *after* the user
-            // dismisses the alert.
-            //
-            // We always use the streaming variant so we can watch brew's output
-            // for sudo's "Sorry, try again" rejection in real time and kill brew
-            // immediately on auth failure. Without this, brew would continue making
-            // additional sudo calls (for cleanup/launchctl), each of which would
-            // block on an empty FIFO and deadlock the whole flow.
-            let runTask: Task<String, Error> = Task.detached {
-                let userOnLine = onLine
-                let watchedOnLine: @Sendable (String) -> Void = { line in
-                    if Self.isAuthFailure(line) {
-                        processHolder.terminate()
-                    }
-                    userOnLine?(line)
+            let userOnLine = onLine
+            let watchedOnLine: @Sendable (String) -> Void = { line in
+                if Self.isAuthFailure(line) {
+                    processHolder.terminate()
                 }
-                return try await self.runCommandStreaming(
+                userOnLine?(line)
+            }
+
+            do {
+                return try await runCommandStreaming(
                     command,
                     arguments: arguments,
                     extraEnvironment: env,
                     onProcess: { processHolder.set($0) },
                     onLine: watchedOnLine
                 )
-            }
-
-            // Present the password window. This await suspends until the user
-            // submits or cancels.
-            let prompt = await AdminPasswordPromptWindowController.present(
-                forPackage: packageName,
-                errorMessage: errorMessageForRetry
-            )
-
-            switch prompt {
-            case .cancelled:
-                // Kill the brew subprocess first — declining the password is
-                // not enough because brew may issue further sudo calls.
-                processHolder.terminate()
-                // Then drain in case the askpass cat is still waiting on the
-                // FIFO; the sentinel will unblock it cleanly.
-                try? await Self.writeToFIFO(fifoPath: fifoPath, content: "\(Self.askpassCancelSentinel)\n")
-                _ = try? await runTask.value
-                throw BrewError.commandFailed("Admin authentication cancelled by user.")
-            case .submitted(let password):
-                try? await Self.writeToFIFO(fifoPath: fifoPath, content: "\(password)\n")
-            }
-
-            do {
-                return try await runTask.value
             } catch let BrewError.commandFailed(output) where Self.isAuthFailure(output) && attempt < maxAttempts {
                 errorMessageForRetry = "Incorrect password — please try again."
                 continue
             } catch let BrewError.commandFailed(output) where Self.isAuthFailure(output) {
                 throw BrewError.commandFailed("Authentication failed after \(maxAttempts) attempts. Cancelled.")
             }
-            // Non-auth errors propagate via the `try await runTask.value` above
+            // Non-auth errors propagate via the `runCommandStreaming` throw above
         }
 
         // Should be unreachable due to throws in the loop
