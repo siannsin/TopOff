@@ -955,8 +955,9 @@ final class BrewService: @unchecked Sendable {
     nonisolated static func isAuthFailure(_ output: String) -> Bool {
         let lower = output.lowercased()
         return lower.contains("sorry, try again")
-            || lower.contains("incorrect password attempt")
+            || lower.contains("incorrect password")
             || lower.contains("authentication failure")
+            || lower.contains("authentication failed")
     }
 
     /// Create a named pipe (FIFO) at `path` with mode 0600. The FIFO is the
