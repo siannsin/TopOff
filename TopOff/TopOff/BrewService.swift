@@ -916,11 +916,19 @@ final class BrewService {
             lock.unlock()
         }
 
+        /// Send SIGKILL to the process and its process group. SIGTERM
+        /// (`Process.terminate()`) is not sufficient — brew's Ruby runtime
+        /// catches SIGTERM and keeps running cleanup work. The negative pid
+        /// addresses the entire process group, which kills brew plus any
+        /// `sudo` / `installer` children it spawned.
         func terminate() {
             lock.lock()
             let p = process
             lock.unlock()
-            p?.terminate()
+            guard let p, p.isRunning else { return }
+            let pid = p.processIdentifier
+            kill(-pid, SIGKILL)   // group
+            kill(pid, SIGKILL)    // process itself, in case it isn't a group leader
         }
     }
 
