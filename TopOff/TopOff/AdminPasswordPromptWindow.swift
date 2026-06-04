@@ -1,4 +1,3 @@
-import SwiftUI
 import AppKit
 
 /// Result of presenting the admin prompt. Either the user submitted a password
@@ -9,161 +8,67 @@ enum AdminPasswordPromptResult {
 }
 
 @MainActor
-final class AdminPasswordPromptWindowController: NSWindowController {
+enum AdminPasswordPromptWindowController {
 
     /// Present the prompt and asynchronously return the user's choice.
     /// Caller is responsible for shuttling the password to sudo (or its
-    /// equivalent) — this window does not touch sudo itself.
+    /// equivalent) — this prompt does not touch sudo itself.
+    ///
+    /// Implemented with `NSAlert` + a secure-text-field accessory view. This
+    /// is the canonical macOS pattern for password modals and avoids the
+    /// SwiftUI/NSHostingView constraint-update death-spiral that bit an
+    /// earlier SwiftUI-window implementation.
     static func present(forPackage packageName: String?,
                         errorMessage: String?) async -> AdminPasswordPromptResult {
         await withCheckedContinuation { continuation in
-            let controller = AdminPasswordPromptWindowController(
+            let result = presentAlert(
                 packageName: packageName,
-                errorMessage: errorMessage,
-                continuation: continuation
+                errorMessage: errorMessage
             )
-            controller.show()
+            continuation.resume(returning: result)
         }
     }
 
-    private var continuation: CheckedContinuation<AdminPasswordPromptResult, Never>?
-
-    private init(packageName: String?,
-                 errorMessage: String?,
-                 continuation: CheckedContinuation<AdminPasswordPromptResult, Never>) {
-        self.continuation = continuation
-
-        let viewModel = AdminPasswordPromptViewModel(
+    private static func presentAlert(packageName: String?,
+                                     errorMessage: String?) -> AdminPasswordPromptResult {
+        let alert = NSAlert()
+        alert.messageText = "TopOff needs administrator access"
+        alert.informativeText = informativeText(
             packageName: packageName,
             errorMessage: errorMessage
         )
-
-        // NSHostingController + NSWindow(contentViewController:) lets SwiftUI
-        // manage its own intrinsic size and the window adapts. Constructing
-        // NSWindow with a hard-coded contentRect and assigning an NSHostingView
-        // separately causes an Update-Constraints death spiral when SwiftUI's
-        // preferred size doesn't match the window's fixed height.
-        let view = AdminPasswordPromptView(viewModel: viewModel)
-        let hostingController = NSHostingController(rootView: view)
-        let window = NSWindow(contentViewController: hostingController)
-        window.styleMask = [.titled, .closable]
-        window.level = .modalPanel
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
-        window.isMovableByWindowBackground = true
-        window.center()
-
-        super.init(window: window)
-        viewModel.onSubmit = { [weak self] password in
-            self?.finish(with: .submitted(password))
+        alert.alertStyle = .informational
+        if let icon = NSImage(named: NSImage.applicationIconName) {
+            alert.icon = icon
         }
-        viewModel.onCancel = { [weak self] in
-            self?.finish(with: .cancelled)
-        }
-        window.delegate = self
-    }
 
-    required init?(coder: NSCoder) {
-        fatalError("not supported")
-    }
+        // Buttons appear right-to-left in NSAlert: first added is the
+        // rightmost (default) button.
+        alert.addButton(withTitle: "Update")
+        alert.addButton(withTitle: "Cancel")
 
-    private func show() {
+        let secureField = NSSecureTextField(frame: NSRect(x: 0, y: 0, width: 260, height: 24))
+        secureField.placeholderString = "Password"
+        alert.accessoryView = secureField
+
+        // Make the alert come to front and land focus in the password field.
         NSApp.activate(ignoringOtherApps: true)
-        showWindow(nil)
-        window?.makeKeyAndOrderFront(nil)
-    }
+        alert.window.initialFirstResponder = secureField
 
-    private func finish(with result: AdminPasswordPromptResult) {
-        guard let continuation else { return }
-        self.continuation = nil
-        continuation.resume(returning: result)
-        close()
-    }
-}
-
-extension AdminPasswordPromptWindowController: NSWindowDelegate {
-    func windowWillClose(_ notification: Notification) {
-        // May fire after finish() has already run (e.g. user clicked Cancel,
-        // which calls finish() which calls close() which posts this). The
-        // guard in finish() makes the second call a no-op.
-        finish(with: .cancelled)
-    }
-}
-
-@MainActor
-final class AdminPasswordPromptViewModel: ObservableObject {
-    @Published var password: String = ""
-    let packageName: String?
-    let errorMessage: String?
-
-    var onSubmit: ((String) -> Void)?
-    var onCancel: (() -> Void)?
-
-    init(packageName: String?, errorMessage: String?) {
-        self.packageName = packageName
-        self.errorMessage = errorMessage
-    }
-
-    func submit() {
-        onSubmit?(password)
-    }
-
-    func cancel() {
-        onCancel?()
-    }
-}
-
-struct AdminPasswordPromptView: View {
-    @ObservedObject var viewModel: AdminPasswordPromptViewModel
-    @FocusState private var passwordFocused: Bool
-
-    var body: some View {
-        VStack(spacing: 14) {
-            if let icon = NSImage(named: NSImage.applicationIconName) {
-                Image(nsImage: icon)
-                    .resizable()
-                    .frame(width: 64, height: 64)
-                    .padding(.top, 6)
-            }
-
-            VStack(spacing: 4) {
-                Text("TopOff needs administrator access")
-                    .font(.title3)
-                    .fontWeight(.medium)
-
-                Text(subtitleText)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-            }
-
-            if let errorMessage = viewModel.errorMessage {
-                Text(errorMessage)
-                    .font(.callout)
-                    .foregroundStyle(.red)
-                    .frame(maxWidth: .infinity, alignment: .center)
-            }
-
-            SecureField("Password", text: $viewModel.password)
-                .textFieldStyle(.roundedBorder)
-                .focused($passwordFocused)
-
-            HStack(spacing: 10) {
-                Button("Cancel") { viewModel.cancel() }
-                    .keyboardShortcut(.cancelAction)
-                Button("Update") { viewModel.submit() }
-                    .keyboardShortcut(.defaultAction)
-                    .buttonStyle(.borderedProminent)
-            }
-            .frame(maxWidth: .infinity, alignment: .trailing)
+        let response = alert.runModal()
+        if response == .alertFirstButtonReturn {
+            return .submitted(secureField.stringValue)
         }
-        .padding(20)
-        .frame(width: 360)
-        .onAppear { passwordFocused = true }
+        return .cancelled
     }
 
-    private var subtitleText: String {
-        let target = viewModel.packageName ?? "some packages"
-        return "to update \(target). Enter your Mac password to continue."
+    private static func informativeText(packageName: String?,
+                                        errorMessage: String?) -> String {
+        let target = packageName ?? "some packages"
+        let base = "Enter your Mac password to update \(target)."
+        if let errorMessage {
+            return "\(errorMessage)\n\n\(base)"
+        }
+        return base
     }
 }
