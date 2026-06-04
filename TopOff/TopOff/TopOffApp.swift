@@ -39,7 +39,6 @@ struct TopOffApp: App {
                         Button("Update") {
                             viewModel.upgradePackage(package)
                         }
-                        .disabled(viewModel.isRunning)
                         Button("Skip") {
                             viewModel.skipPackage(package)
                         }
