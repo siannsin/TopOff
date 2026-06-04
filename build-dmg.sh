@@ -12,6 +12,9 @@ ASSETS_DIR="$SCRIPT_DIR/assets/dmg"
 BG_IMAGE="$ASSETS_DIR/background.png"
 VOLUME_ICON="$ASSETS_DIR/volume-icon.icns"
 
+SIGNING_IDENTITY="Developer ID Application: Malsah Labs LLC (GN4XAZC5QR)"
+NOTARY_PROFILE="malsah-labs-notary"
+
 # Get version from argument or read from project
 if [ -n "$1" ]; then
     VERSION="$1"
@@ -51,6 +54,13 @@ if [[ "$ARCHS" != *"x86_64"* ]] || [[ "$ARCHS" != *"arm64"* ]]; then
     echo "ERROR: Not a universal binary!"
     exit 1
 fi
+
+# Sign the app with hardened runtime and a secure timestamp (required by notary)
+echo "==> Signing app with Developer ID..."
+codesign --force --options runtime --timestamp \
+    --sign "$SIGNING_IDENTITY" \
+    "$RELEASE_APP"
+codesign --verify --strict --verbose=2 "$RELEASE_APP" 2>&1 | tail -3
 
 # Clean up any previous DMG build artifacts
 rm -f "$DMG_RW" 2>/dev/null
@@ -113,6 +123,25 @@ echo "==> Compressing..."
 rm -f "$DMG_FINAL" 2>/dev/null
 hdiutil convert "$DMG_RW" -format UDZO -o "$DMG_FINAL" > /dev/null 2>&1
 rm -f "$DMG_RW"
+
+# Sign the DMG itself so Gatekeeper can verify it as a container
+echo "==> Signing DMG..."
+codesign --force --sign "$SIGNING_IDENTITY" "$DMG_FINAL"
+
+# Submit to Apple notary service and wait for the result (~2-15 min typical)
+echo "==> Submitting to Apple notary service..."
+echo "    (Typical turnaround: 2-15 minutes. Apple status: developer.apple.com/system-status)"
+xcrun notarytool submit "$DMG_FINAL" \
+    --keychain-profile "$NOTARY_PROFILE" \
+    --wait
+
+# Staple the notarization ticket onto the DMG so it works offline
+echo "==> Stapling notarization ticket..."
+xcrun stapler staple "$DMG_FINAL"
+
+# Verify Gatekeeper will accept it on a fresh download
+echo "==> Verifying Gatekeeper acceptance..."
+spctl -a -vvv -t install "$DMG_FINAL" 2>&1 | tail -5
 
 echo "==> Done: $DMG_NAME"
 echo "    $(du -h "$DMG_FINAL" | cut -f1) compressed"
