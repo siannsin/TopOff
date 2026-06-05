@@ -56,7 +56,7 @@ The menu bar icon tells you at a glance if updates are available:
 
 1. Download the [latest DMG](https://github.com/ihazgithub/TopOff/releases/latest/download/TopOff-v2.0.dmg)
 2. Open the DMG and drag TopOff to your Applications folder
-3. Launch TopOff — it's signed and notarized by Apple, so it opens straight away with no security workarounds needed.
+3. Launch TopOff. It's signed and notarized by Apple, so it opens immediately on first launch — no trip through Privacy & Security needed.
 
 ### Build from Source
 

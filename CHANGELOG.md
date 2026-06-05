@@ -4,20 +4,29 @@
 
 ### Headline
 
-- **Now signed and notarized by Apple** — TopOff installs cleanly on first launch with no need to use System Settings → Privacy & Security → Open Anyway.
+- **Signed and notarized by Apple** — installs cleanly on first launch. No more visiting System Settings → Privacy & Security or clicking "Open Anyway."
 
 ### Improvements
 
-- **Native admin password prompt** — Replaces the old AppleScript dialog with a polished native window that shows the app icon, names the package that needs admin access, and supports up to three wrong-password retries with clear messaging.
-- **Persistent Skipped Packages** — Optional "Remember Skipped Packages" mode in Options keeps Skip choices across checks and restarts; a Manage window lets you remove saved skips at any time.
-- **Friendlier error messages** — Common Homebrew failures (network issues, disk full, missing Command Line Tools, busy lock files, removed casks) now surface as clear titles and actionable suggestions instead of raw CLI output.
-- **Cleaner menu rows** — Last Update entries show just the new version, with smart abbreviation for SHA-style cask versions so single rows can't push the menu wide. Package names use a refined typography hierarchy.
-- **"All packages up to date" confirmation** — When everything is current, the menu shows a subtle green checkmark line so the state is unambiguous.
-- **History view grouped by date** — Update history is now organized under Today / Yesterday / day-name / date headers, similar to Mail and Reminders.
+- **Native admin password prompt** — replaces the old AppleScript dialog with a native window that names the package needing access and allows up to three retries on a wrong password.
+- **Persistent Skipped Packages** — optional Remember mode in Options keeps Skip choices across checks and restarts; a Manage window lets you clear saved skips.
+- **"All packages up to date" confirmation** — a subtle green check line appears in the menu when nothing is outdated.
+- **History grouped by date** — Update History now uses Today / Yesterday / day-name / date headers.
+- **Friendlier error messages** — common Homebrew failures (network, disk full, missing Command Line Tools, busy lock, removed casks) show clear titles and suggestions instead of raw CLI output.
+- **Cleaner outdated rows** — show just the package name, so the menu stays narrow.
+- **Smarter version display** — collapses long cask version strings (e.g. `2506-8.16.0-16536825094,CART26FQ2_MAC_2506`) down to the semver-shaped core (`8.16.0`).
+
+### Fixes
+
+- **Per-package Update works on auto-updating casks** — apps like Omnissa Horizon Client no longer fail silently.
+- **Admin-protected cask installs no longer deadlock** — the multi-step sudo handoff has been reworked.
+- **Cancel actually stops Homebrew** — uses SIGKILL on the process group so brew halts within seconds instead of finishing on its own.
+- **Submenu hover works during active updates** — outdated rows open their Update/Skip submenu reliably while another update is running.
 
 ### Notes
 
 - Existing settings carry over; no manual migration needed.
+- Supports macOS 14 and later. Universal binary for Apple Silicon and Intel.
 
 ---
 
