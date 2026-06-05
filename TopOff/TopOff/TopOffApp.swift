@@ -237,18 +237,22 @@ struct TopOffApp: App {
     }
 }
 
-/// Menu-bar icon shown while a check or update is in flight. Uses an SF
-/// Symbol effect (`.pulse`) rather than a Timer-driven rotation because
-/// (a) `withAnimation` doesn't propagate through `MenuBarExtra` labels —
-/// they're bridged to `NSStatusItem` which ignores SwiftUI's animation
-/// system — and (b) any timer-based @Published spinner fires
-/// `objectWillChange` ~10× per second, which reconciles the whole menu
-/// tree and breaks NSMenu's hover-to-open-submenu delay. Symbol Effects
-/// are rendered by AppKit so they animate correctly in the menu bar
-/// without touching SwiftUI state.
+/// Menu-bar icon shown while a check or update is in flight. Rotation is
+/// driven by `TimelineView(.animation)` so the angle is a pure function of
+/// the current frame's timestamp — no `@Published` ticks, no
+/// `objectWillChange` fanout to the surrounding view model. That matters
+/// because the previous timer-based spinner fired `objectWillChange` on
+/// the view model ~10× per second, which forced the entire `MenuBarExtra`
+/// menu tree to reconcile and broke NSMenu's hover-to-open-submenu delay
+/// on the outdated package rows. `TimelineView` updates are local to its
+/// own subtree.
 private struct SpinningArrowsLabel: View {
     var body: some View {
-        Image(systemName: "arrow.triangle.2.circlepath")
-            .symbolEffect(.pulse, options: .repeating)
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
+            let elapsed = context.date.timeIntervalSinceReferenceDate
+            let rotation = elapsed.truncatingRemainder(dividingBy: 1.2) / 1.2 * -360
+            Image(systemName: "arrow.triangle.2.circlepath")
+                .rotationEffect(.degrees(rotation))
+        }
     }
 }
