@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 @main
@@ -237,22 +238,98 @@ struct TopOffApp: App {
     }
 }
 
-/// Menu-bar icon shown while a check or update is in flight. Rotation is
-/// driven by `TimelineView(.animation)` so the angle is a pure function of
-/// the current frame's timestamp — no `@Published` ticks, no
-/// `objectWillChange` fanout to the surrounding view model. That matters
-/// because the previous timer-based spinner fired `objectWillChange` on
-/// the view model ~10× per second, which forced the entire `MenuBarExtra`
-/// menu tree to reconcile and broke NSMenu's hover-to-open-submenu delay
-/// on the outdated package rows. `TimelineView` updates are local to its
-/// own subtree.
+/// Menu-bar icon shown while a check or update is in flight.
+///
+/// Rotation is driven by a `CABasicAnimation` applied directly to the
+/// underlying `NSStatusItem.button`'s `CALayer`. This sidesteps two
+/// constraints we ran into earlier:
+///
+/// 1. `MenuBarExtra` labels are rendered through an AppKit bridge that
+///    does NOT honor SwiftUI's animation system. `withAnimation` rotation
+///    is silently no-op'd; `TimelineView` renders blank.
+/// 2. Any spinner driven by `@Published` on the view model fires
+///    `objectWillChange` ~10× per second, which forces the entire
+///    `MenuBarExtra` menu content closure to reconcile and breaks NSMenu's
+///    hover-to-open-submenu delay on the outdated package rows.
+///
+/// Core Animation runs the rotation on the render server — zero SwiftUI
+/// state changes, zero menu invalidations — so the icon spins continuously
+/// while the menu's submenu hover behavior remains intact.
 private struct SpinningArrowsLabel: View {
     var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { context in
-            let elapsed = context.date.timeIntervalSinceReferenceDate
-            let rotation = elapsed.truncatingRemainder(dividingBy: 1.2) / 1.2 * -360
-            Image(systemName: "arrow.triangle.2.circlepath")
-                .rotationEffect(.degrees(rotation))
+        Image(systemName: "arrow.triangle.2.circlepath")
+            .onAppear { MenuBarSpinController.shared.start() }
+            .onDisappear { MenuBarSpinController.shared.stop() }
+    }
+}
+
+/// Finds the `NSStatusBarButton` created by the app's single `MenuBarExtra`
+/// and runs a Core Animation rotation on its layer. Safe to call
+/// `start()` / `stop()` repeatedly — adding an animation with the same key
+/// replaces the existing one, and removing a non-existent animation is a
+/// no-op.
+@MainActor
+final class MenuBarSpinController {
+    static let shared = MenuBarSpinController()
+
+    private weak var cachedButton: NSStatusBarButton?
+
+    /// Walks `NSApp.windows` for the persistent menu-bar status item
+    /// button. `NSStatusBar.statusItems` is not public API on macOS, so
+    /// we discover the button by type instead. `NSStatusBarButton` is a
+    /// dedicated AppKit class used only for menu-bar status items, so any
+    /// match is the right one.
+    private func findButton() -> NSStatusBarButton? {
+        if let cached = cachedButton { return cached }
+        for window in NSApp.windows {
+            if let button = firstStatusBarButton(in: window.contentView) {
+                cachedButton = button
+                return button
+            }
         }
+        return nil
+    }
+
+    private func firstStatusBarButton(in root: NSView?) -> NSStatusBarButton? {
+        guard let root else { return nil }
+        var stack: [NSView] = [root]
+        while let view = stack.popLast() {
+            if let button = view as? NSStatusBarButton {
+                return button
+            }
+            stack.append(contentsOf: view.subviews)
+        }
+        return nil
+    }
+
+    func start() {
+        guard let button = findButton() else { return }
+        button.wantsLayer = true
+        guard let layer = button.layer else { return }
+
+        // Pivot around the icon's center. `NSStatusBarButton` layers
+        // default to anchorPoint (0, 0), which would rotate the icon
+        // around its bottom-left corner and visibly translate it. Move
+        // the anchor to the center and shift `position` by the same
+        // amount so the on-screen frame is unchanged.
+        if layer.anchorPoint != CGPoint(x: 0.5, y: 0.5) {
+            let bounds = layer.bounds
+            layer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+            layer.position = CGPoint(
+                x: layer.position.x + bounds.width * 0.5,
+                y: layer.position.y + bounds.height * 0.5
+            )
+        }
+
+        let spin = CABasicAnimation(keyPath: "transform.rotation.z")
+        spin.fromValue = 0
+        spin.toValue = -Double.pi * 2 // negative = clockwise on screen
+        spin.duration = 1.2
+        spin.repeatCount = .infinity
+        layer.add(spin, forKey: "topoff.spin")
+    }
+
+    func stop() {
+        cachedButton?.layer?.removeAnimation(forKey: "topoff.spin")
     }
 }
