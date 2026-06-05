@@ -16,6 +16,10 @@
   <a href="https://github.com/ihazgithub/TopOff/releases/latest/download/TopOff-v2.0.dmg">Download TopOff for macOS</a>
 </p>
 
+<p align="center">
+  <em>Version 2.0 is here — now signed and notarized by Apple. <a href="CHANGELOG.md">See what's new →</a></em>
+</p>
+
 If you use Homebrew, you have probably forgotten to run `brew update && brew upgrade` for weeks at a time. TopOff checks quietly in the background, shows outdated packages from the menu bar, and lets you update with one click.
 
 ## Features
