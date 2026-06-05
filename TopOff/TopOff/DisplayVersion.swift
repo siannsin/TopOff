@@ -1,36 +1,55 @@
 import Foundation
 
-/// Helper for shortening Homebrew cask version strings that include long
-/// SHA-style suffixes (e.g. `1.9255.0,a22af1fabbbc85af5502e695ed8fbea9f74276fc`).
-/// Used at the menu render layer so a single wide row can't blow out the
-/// entire menu width.
+/// Helper for collapsing Homebrew cask version strings down to the
+/// recognizable semver-like core. Cask versions are wildly inconsistent —
+/// some are plain (`126.4.12`), some include git SHAs
+/// (`1.9255.0,a22af1fabbbc85af5502e695ed8fbea9f74276fc`), some bundle
+/// release codes and build numbers (`2506-8.16.0-16536825094,CART26FQ2_MAC_2506`).
+/// Showing the raw string makes menu rows enormous and unreadable, so this
+/// extracts the most version-shaped substring and discards the rest.
 enum DisplayVersion {
 
-    /// Returns `version` with any SHA-like segment shortened to 7 characters.
-    /// A segment after a comma is treated as SHA-like if it is at least 8
-    /// characters long AND contains at least one hex letter (`a`–`f` or
-    /// `A`–`F`). Numeric-only build numbers are left untouched.
+    /// Returns the most semver-shaped run of digits-and-dots inside
+    /// `version`. "Most version-shaped" means the most dots; ties broken
+    /// by string length. Falls back to the segment before the first comma
+    /// when nothing matches.
+    ///
+    /// Examples:
+    /// - `"1.9255.0,a22af1fabbbc..."` → `"1.9255.0"`
+    /// - `"2506-8.16.0-16536825094,CART26FQ2_MAC_2506"` → `"8.16.0"`
+    /// - `"1.10628.2,deee0a7"` → `"1.10628.2"`
+    /// - `"126.4.12"` → `"126.4.12"`
     static func abbreviate(_ version: String) -> String {
-        guard version.contains(",") else { return version }
+        let nsString = version as NSString
+        let range = NSRange(location: 0, length: nsString.length)
+        let matches = Self.dottedNumberRegex?.matches(in: version, range: range) ?? []
 
-        let segments = version.split(separator: ",", omittingEmptySubsequences: false)
-        let abbreviated = segments.map { segment -> Substring in
-            guard isSHALike(segment) else { return segment }
-            return segment.prefix(7)
-        }
-        return abbreviated.joined(separator: ",")
-    }
-
-    private static func isSHALike(_ segment: Substring) -> Bool {
-        guard segment.count >= 8 else { return false }
-        var seenAlphaHex = false
-        for ch in segment {
-            if ch.isHexDigit {
-                if ch.isLetter { seenAlphaHex = true }
+        var best: (text: String, dots: Int)?
+        for match in matches {
+            let text = nsString.substring(with: match.range)
+            let dots = text.reduce(0) { $1 == "." ? $0 + 1 : $0 }
+            if let current = best {
+                if dots > current.dots || (dots == current.dots && text.count > current.text.count) {
+                    best = (text, dots)
+                }
             } else {
-                return false
+                best = (text, dots)
             }
         }
-        return seenAlphaHex
+
+        if let best { return best.text }
+
+        // No dotted version anywhere. Fall back to the segment before the
+        // first comma, which trims off any trailing build-metadata blob.
+        if let comma = version.firstIndex(of: ",") {
+            return String(version[..<comma])
+        }
+        return version
     }
+
+    /// One or more digits, then one-or-more `.<digits>` groups. Matches the
+    /// classic `X.Y`, `X.Y.Z`, `X.Y.Z.W`, etc.
+    private static let dottedNumberRegex: NSRegularExpression? = {
+        try? NSRegularExpression(pattern: #"\d+(?:\.\d+)+"#)
+    }()
 }
