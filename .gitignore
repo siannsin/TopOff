@@ -34,3 +34,6 @@ DerivedData/
 # Editor metadata
 .idea/
 .vscode/
+
+# Session-local workflow / brainstorming caches
+.superpowers/
