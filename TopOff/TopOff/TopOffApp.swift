@@ -36,7 +36,7 @@ struct TopOffApp: App {
                 let overflow = visible.count - displayPackages.count
 
                 ForEach(displayPackages) { package in
-                    Menu("\(package.name)  \(DisplayVersion.abbreviate(package.latestVersion))") {
+                    Menu(package.name) {
                         Button("Update") {
                             viewModel.upgradePackage(package)
                         }
