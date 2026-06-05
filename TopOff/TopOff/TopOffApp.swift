@@ -238,17 +238,17 @@ struct TopOffApp: App {
 }
 
 /// Menu-bar icon shown while a check or update is in flight. Uses an SF
-/// Symbol effect (`.variableColor.iterative`) rather than a Timer-driven
-/// rotation because (a) `withAnimation` doesn't propagate through
-/// `MenuBarExtra` labels — they're bridged to `NSStatusItem` which ignores
-/// SwiftUI's animation system — and (b) any timer-based @Published spinner
-/// fires `objectWillChange` ~10× per second, which reconciles the whole
-/// menu tree and breaks NSMenu's hover-to-open-submenu delay. Symbol Effects
-/// are rendered by AppKit so they animate correctly in the menu bar without
-/// touching SwiftUI state.
+/// Symbol effect (`.pulse`) rather than a Timer-driven rotation because
+/// (a) `withAnimation` doesn't propagate through `MenuBarExtra` labels —
+/// they're bridged to `NSStatusItem` which ignores SwiftUI's animation
+/// system — and (b) any timer-based @Published spinner fires
+/// `objectWillChange` ~10× per second, which reconciles the whole menu
+/// tree and breaks NSMenu's hover-to-open-submenu delay. Symbol Effects
+/// are rendered by AppKit so they animate correctly in the menu bar
+/// without touching SwiftUI state.
 private struct SpinningArrowsLabel: View {
     var body: some View {
         Image(systemName: "arrow.triangle.2.circlepath")
-            .symbolEffect(.variableColor.iterative, options: .repeating)
+            .symbolEffect(.pulse, options: .repeating)
     }
 }
