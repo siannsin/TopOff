@@ -303,33 +303,64 @@ final class MenuBarSpinController {
     }
 
     func start() {
-        guard let button = findButton() else { return }
-        button.wantsLayer = true
-        guard let layer = button.layer else { return }
-
-        // Pivot around the icon's center. `NSStatusBarButton` layers
-        // default to anchorPoint (0, 0), which would rotate the icon
-        // around its bottom-left corner and visibly translate it. Move
-        // the anchor to the center and shift `position` by the same
-        // amount so the on-screen frame is unchanged.
-        if layer.anchorPoint != CGPoint(x: 0.5, y: 0.5) {
-            let bounds = layer.bounds
-            layer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
-            layer.position = CGPoint(
-                x: layer.position.x + bounds.width * 0.5,
-                y: layer.position.y + bounds.height * 0.5
-            )
+        // Defer to the next runloop turn. `.onAppear` fires inside
+        // SwiftUI's layout pass; mutating the host button's layer in that
+        // window causes `NSHostingView` to invalidate, re-push the image,
+        // re-run `-[NSStatusItem _adjustLength]`, and bounce SwiftUI into
+        // another layout pass — a runaway loop that makes the menu-bar
+        // slot collapse to zero width and become unclickable.
+        DispatchQueue.main.async { [weak self] in
+            self?.applyAnimation(attemptsRemaining: 3)
         }
-
-        let spin = CABasicAnimation(keyPath: "transform.rotation.z")
-        spin.fromValue = 0
-        spin.toValue = -Double.pi * 2 // negative = clockwise on screen
-        spin.duration = 1.2
-        spin.repeatCount = .infinity
-        layer.add(spin, forKey: "topoff.spin")
     }
 
     func stop() {
         cachedButton?.layer?.removeAnimation(forKey: "topoff.spin")
+    }
+
+    private func applyAnimation(attemptsRemaining: Int) {
+        guard let button = findButton() else { return }
+        button.wantsLayer = true
+        guard let layer = button.layer else { return }
+
+        let bounds = layer.bounds
+        guard bounds.width > 0, bounds.height > 0 else {
+            // Layer hasn't been laid out yet. Try again on the next
+            // runloop turn (a few times only, then give up — better to
+            // render a static icon than to spin retrying forever).
+            if attemptsRemaining > 0 {
+                DispatchQueue.main.async { [weak self] in
+                    self?.applyAnimation(attemptsRemaining: attemptsRemaining - 1)
+                }
+            }
+            return
+        }
+
+        // Build a keyframe animation that rotates the layer's content
+        // around its visual center WITHOUT modifying `anchorPoint` or
+        // `position`. The model-layer geometry stays identical to its
+        // resting state, so SwiftUI's `NSHostingView` sees no change and
+        // doesn't re-push the image. Each keyframe is a composite:
+        //     T(+halfW, +halfH) · R(θ) · T(-halfW, -halfH)
+        // which is equivalent to "rotate around (halfW, halfH)" — the
+        // standard pivot-around-arbitrary-point trick for matrices.
+        let halfW = bounds.width / 2.0
+        let halfH = bounds.height / 2.0
+        let steps = 60
+        let values: [NSValue] = (0...steps).map { i in
+            let theta = -Double.pi * 2.0 * Double(i) / Double(steps)
+            var t = CATransform3DIdentity
+            t = CATransform3DTranslate(t, halfW, halfH, 0)
+            t = CATransform3DRotate(t, theta, 0, 0, 1)
+            t = CATransform3DTranslate(t, -halfW, -halfH, 0)
+            return NSValue(caTransform3D: t)
+        }
+
+        let spin = CAKeyframeAnimation(keyPath: "transform")
+        spin.values = values
+        spin.duration = 1.2
+        spin.repeatCount = .infinity
+        spin.calculationMode = .linear
+        layer.add(spin, forKey: "topoff.spin")
     }
 }
