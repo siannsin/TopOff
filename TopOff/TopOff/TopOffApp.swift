@@ -237,22 +237,18 @@ struct TopOffApp: App {
     }
 }
 
-/// Continuously-rotating arrows used as the menu-bar icon during checks /
-/// updates. Driven by SwiftUI's animation system instead of a timer that
-/// publishes new `NSImage`s onto the view-model. The previous timer-based
-/// approach fired `@Published` ticks every 100 ms, which made the whole
-/// menu tree reconcile constantly and broke hover-to-open-submenu behavior
-/// on the outdated package rows.
+/// Menu-bar icon shown while a check or update is in flight. Uses an SF
+/// Symbol effect (`.variableColor.iterative`) rather than a Timer-driven
+/// rotation because (a) `withAnimation` doesn't propagate through
+/// `MenuBarExtra` labels — they're bridged to `NSStatusItem` which ignores
+/// SwiftUI's animation system — and (b) any timer-based @Published spinner
+/// fires `objectWillChange` ~10× per second, which reconciles the whole
+/// menu tree and breaks NSMenu's hover-to-open-submenu delay. Symbol Effects
+/// are rendered by AppKit so they animate correctly in the menu bar without
+/// touching SwiftUI state.
 private struct SpinningArrowsLabel: View {
-    @State private var rotation: Double = 0
-
     var body: some View {
         Image(systemName: "arrow.triangle.2.circlepath")
-            .rotationEffect(.degrees(rotation))
-            .onAppear {
-                withAnimation(.linear(duration: 1.2).repeatForever(autoreverses: false)) {
-                    rotation = -360
-                }
-            }
+            .symbolEffect(.variableColor.iterative, options: .repeating)
     }
 }
