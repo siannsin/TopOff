@@ -1,5 +1,18 @@
 # Changelog
 
+## v2.0.1 — June 2026
+
+### Fixes
+
+- **Correct package counts in Last Update and History** — Updates could be double-counted: each upgraded package sometimes appeared twice — once correctly and once as a phantom `? → ?` row — so the menu and Update History showed too many packages (for example "4 packages" when only two updated). The cause was a recent change to Homebrew's upgrade output, which now lines versions up into columns; TopOff's parser misread the extra spacing and even folded a package's old version into its name. TopOff now reads the column-aligned output correctly, counts each package once, and shows its real version change. History saved by an affected version is cleaned up automatically the next time you launch.
+
+### Notes
+
+- Existing settings and history carry over; the one-time history cleanup needs no action.
+- Supports macOS 14 and later. Universal binary for Apple Silicon and Intel.
+
+---
+
 ## v2.0 — June 2026
 
 ### Headline
