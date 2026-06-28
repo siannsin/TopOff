@@ -107,6 +107,56 @@ struct UpdateResult: Codable {
             timestamp: timestamp
         )
     }
+
+    /// Repairs records produced by the pre-fix upgrade parser. Older builds
+    /// could bake a package's old version and column padding into the `name`
+    /// field (leaving `oldVersion` empty) and emit a duplicate `?`/`?` entry
+    /// for the same package. This trims names back to the real package name,
+    /// recovers the leaked old version, and collapses duplicates by name —
+    /// keeping whichever entry carries real version info. It's idempotent, so
+    /// clean records pass through unchanged.
+    func sanitized() -> UpdateResult {
+        var cleaned: [UpgradedPackage] = []
+        var indexByName: [String: Int] = [:]
+
+        for package in packages {
+            // A real package name never contains whitespace. If one does, the
+            // first token is the name and any second token is the old version
+            // that leaked in from the column-aligned summary line.
+            let tokens = package.name
+                .split(whereSeparator: { $0 == " " || $0 == "\t" })
+                .map(String.init)
+            let cleanName = tokens.first ?? package.name.trimmingCharacters(in: .whitespaces)
+            guard !cleanName.isEmpty else { continue }
+
+            var oldVersion = package.oldVersion
+            if oldVersion.isEmpty, tokens.count >= 2 {
+                oldVersion = tokens[1]
+            }
+            let candidate = UpgradedPackage(
+                name: cleanName,
+                oldVersion: oldVersion,
+                newVersion: package.newVersion
+            )
+
+            if let existing = indexByName[cleanName] {
+                // Same package listed twice — prefer the entry with real
+                // version info over a "?"/"" placeholder.
+                if !Self.hasKnownVersion(cleaned[existing]) && Self.hasKnownVersion(candidate) {
+                    cleaned[existing] = candidate
+                }
+            } else {
+                indexByName[cleanName] = cleaned.count
+                cleaned.append(candidate)
+            }
+        }
+
+        return UpdateResult(packages: cleaned, timestamp: timestamp)
+    }
+
+    private static func hasKnownVersion(_ package: UpgradedPackage) -> Bool {
+        package.newVersion != "?" && !package.newVersion.isEmpty
+    }
 }
 
 struct UpdateProgressItem: Identifiable, Equatable {
@@ -302,7 +352,18 @@ final class BrewService: @unchecked Sendable {
 
                 let parts = cleanLine.components(separatedBy: " -> ")
                 if parts.count == 2 {
-                    let leftParts = parts[0].components(separatedBy: " ")
+                    // Split on whitespace *runs*, not a single space. Newer
+                    // Homebrew column-aligns the upgrade summary, padding the
+                    // name/old-version columns with multiple spaces so the
+                    // arrows line up. A single-space split turned that padding
+                    // into empty components, which baked the old version into
+                    // the name (leaving oldVersion empty) and — because the
+                    // malformed name dodged the dedup guard — spawned a
+                    // duplicate "?"/"?" entry from the later "==> Upgrading"
+                    // line.
+                    let leftParts = parts[0]
+                        .split(whereSeparator: { $0 == " " || $0 == "\t" })
+                        .map(String.init)
                     if leftParts.count >= 2 {
                         let name = leftParts.dropLast().joined(separator: " ")
                         let oldVersion = leftParts.last ?? ""

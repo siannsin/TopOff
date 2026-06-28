@@ -32,6 +32,28 @@ enum MenuBarIconState {
     }
 }
 
+/// Abstraction over the system "launch at login" registration. Injecting this
+/// lets `MenuBarViewModel` be unit-tested without mutating the user's real
+/// login items through `SMAppService`.
+protocol LaunchAtLoginManaging {
+    func setEnabled(_ enabled: Bool)
+}
+
+/// Production implementation backed by `SMAppService.mainApp`.
+struct SMAppServiceLaunchAtLogin: LaunchAtLoginManaging {
+    func setEnabled(_ enabled: Bool) {
+        do {
+            if enabled {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+        } catch {
+            print("Failed to update launch at login: \(error)")
+        }
+    }
+}
+
 @MainActor
 final class MenuBarViewModel: ObservableObject {
     static let appUpdateCheckInterval: TimeInterval = 21_600
@@ -54,34 +76,34 @@ final class MenuBarViewModel: ObservableObject {
     @Published var skippedPackages: Set<String> = []
     @Published var checkInterval: TimeInterval {
         didSet {
-            UserDefaults.standard.set(checkInterval, forKey: "checkInterval")
+            defaults.set(checkInterval, forKey: "checkInterval")
             restartPeriodicChecks()
         }
     }
     @Published var launchAtLogin: Bool {
         didSet {
-            UserDefaults.standard.set(launchAtLogin, forKey: "launchAtLogin")
+            defaults.set(launchAtLogin, forKey: "launchAtLogin")
             updateLaunchAtLogin()
         }
     }
     @Published var autoCleanupEnabled: Bool {
         didSet {
-            UserDefaults.standard.set(autoCleanupEnabled, forKey: "autoCleanupEnabled")
+            defaults.set(autoCleanupEnabled, forKey: "autoCleanupEnabled")
         }
     }
     @Published var autoCleanupStyle: AutoCleanupStyle {
         didSet {
-            autoCleanupStyle.save()
+            autoCleanupStyle.save(in: defaults)
         }
     }
     @Published var greedyModeEnabled: Bool {
         didSet {
-            UserDefaults.standard.set(greedyModeEnabled, forKey: "greedyModeEnabled")
+            defaults.set(greedyModeEnabled, forKey: "greedyModeEnabled")
         }
     }
     @Published var rememberSkippedPackages: Bool {
         didSet {
-            UserDefaults.standard.set(rememberSkippedPackages, forKey: "rememberSkippedPackages")
+            defaults.set(rememberSkippedPackages, forKey: "rememberSkippedPackages")
         }
     }
     @Published var rememberedSkipList: Set<String> {
@@ -100,6 +122,8 @@ final class MenuBarViewModel: ObservableObject {
         }
     }
 
+    private let defaults: UserDefaults
+    private let loginItemManager: LaunchAtLoginManaging
     private let brewService = BrewService()
     private let updateChecker = UpdateChecker()
     private let notificationManager = NotificationManager.shared
@@ -111,22 +135,28 @@ final class MenuBarViewModel: ObservableObject {
     private var spinnerFrameIndex = 0
     @Published private var initialCheckSucceeded = false
 
-    init(skipInitialChecks: Bool = false) {
-        self.launchAtLogin = UserDefaults.standard.bool(forKey: "launchAtLogin")
-        self.checkInterval = UserDefaults.standard.object(forKey: "checkInterval") as? TimeInterval ?? 14400
+    init(
+        skipInitialChecks: Bool = false,
+        defaults: UserDefaults = .standard,
+        loginItemManager: LaunchAtLoginManaging = SMAppServiceLaunchAtLogin()
+    ) {
+        self.defaults = defaults
+        self.loginItemManager = loginItemManager
+        self.launchAtLogin = defaults.bool(forKey: "launchAtLogin")
+        self.checkInterval = defaults.object(forKey: "checkInterval") as? TimeInterval ?? 14400
         // Default to true for auto cleanup — UserDefaults.bool returns false if key doesn't exist
-        if UserDefaults.standard.object(forKey: "autoCleanupEnabled") == nil {
+        if defaults.object(forKey: "autoCleanupEnabled") == nil {
             self.autoCleanupEnabled = true
         } else {
-            self.autoCleanupEnabled = UserDefaults.standard.bool(forKey: "autoCleanupEnabled")
+            self.autoCleanupEnabled = defaults.bool(forKey: "autoCleanupEnabled")
         }
-        self.autoCleanupStyle = AutoCleanupStyle.stored()
-        self.greedyModeEnabled = UserDefaults.standard.bool(forKey: "greedyModeEnabled")
-        self.rememberSkippedPackages = UserDefaults.standard.bool(forKey: "rememberSkippedPackages")
-        self.rememberedSkipList = Self.loadRememberedSkipList()
+        self.autoCleanupStyle = AutoCleanupStyle.stored(in: defaults)
+        self.greedyModeEnabled = defaults.bool(forKey: "greedyModeEnabled")
+        self.rememberSkippedPackages = defaults.bool(forKey: "rememberSkippedPackages")
+        self.rememberedSkipList = Self.loadRememberedSkipList(from: defaults)
         spinnerFrames = Self.generateSpinnerFrames()
         loadUpdateHistory()
-        UserDefaults.standard.removeObject(forKey: "packagesNeedingAttention")
+        defaults.removeObject(forKey: "packagesNeedingAttention")
         notificationManager.requestPermission()
 
         // Start network monitor to handle connectivity restoration
@@ -767,15 +797,7 @@ final class MenuBarViewModel: ObservableObject {
     }
 
     private func updateLaunchAtLogin() {
-        do {
-            if launchAtLogin {
-                try SMAppService.mainApp.register()
-            } else {
-                try SMAppService.mainApp.unregister()
-            }
-        } catch {
-            print("Failed to update launch at login: \(error)")
-        }
+        loginItemManager.setEnabled(launchAtLogin)
     }
 
     // MARK: - Update History
@@ -790,27 +812,31 @@ final class MenuBarViewModel: ObservableObject {
 
     private func saveUpdateHistory() {
         if let encoded = try? JSONEncoder().encode(updateHistory) {
-            UserDefaults.standard.set(encoded, forKey: "updateHistory")
+            defaults.set(encoded, forKey: "updateHistory")
         }
     }
 
     private func loadUpdateHistory() {
-        if let data = UserDefaults.standard.data(forKey: "updateHistory"),
+        if let data = defaults.data(forKey: "updateHistory"),
            let decoded = try? JSONDecoder().decode([UpdateResult].self, from: data) {
-            updateHistory = decoded
-            lastUpdateResult = decoded.first
+            // Heal records written by the pre-fix parser (malformed names,
+            // empty old versions, duplicate "?" rows). Assigning back through
+            // the `didSet` re-persists the cleaned history, so this runs once.
+            let sanitized = decoded.map { $0.sanitized() }
+            updateHistory = sanitized
+            lastUpdateResult = sanitized.first
         }
     }
 
     private func saveRememberedSkipList() {
         let sorted = rememberedSkipList.sorted()
         if let data = try? JSONEncoder().encode(sorted) {
-            UserDefaults.standard.set(data, forKey: "rememberedSkipList")
+            defaults.set(data, forKey: "rememberedSkipList")
         }
     }
 
-    private static func loadRememberedSkipList() -> Set<String> {
-        guard let data = UserDefaults.standard.data(forKey: "rememberedSkipList"),
+    private static func loadRememberedSkipList(from defaults: UserDefaults) -> Set<String> {
+        guard let data = defaults.data(forKey: "rememberedSkipList"),
               let array = try? JSONDecoder().decode([String].self, from: data) else {
             return []
         }

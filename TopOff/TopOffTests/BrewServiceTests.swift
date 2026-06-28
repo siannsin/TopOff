@@ -94,6 +94,69 @@ final class BrewServiceTests: XCTestCase {
         XCTAssertEqual(packages.first?.name, "node")
     }
 
+    func testParseUpgradeOutputHandlesColumnAlignedSummary() {
+        // Newer Homebrew prints the upgrade summary as a column-aligned table:
+        // the name and old-version columns are padded with runs of spaces so
+        // the "->" arrows line up. The old single-space split baked the old
+        // version + padding into the name (leaving oldVersion empty) and then
+        // emitted a duplicate "?"/"?" entry per package because the malformed
+        // name defeated the dedup guard.
+        let pad = { (text: String, width: Int) in
+            text + String(repeating: " ", count: max(1, width - text.count))
+        }
+        let summary = [
+            "==> Upgrading 3 outdated packages:",
+            pad("pnpm", 16) + pad("11.8.0", 52) + "-> 11.9.0 (4MB)",
+            pad("warp", 16) + pad("0.2026.06.10.09.27.stable_01", 52) + "-> 0.2026.06.17.09.49.stable_01",
+            pad("docker-desktop", 16) + pad("4.78.0,229452", 52) + "-> 4.79.0,230596",
+            "==> Fetching pnpm",
+            "==> Upgrading pnpm",
+            "==> Upgrading warp",
+            "==> Upgrading docker-desktop"
+        ].joined(separator: "\n")
+
+        let packages = BrewService.parseUpgradeOutput(summary)
+
+        XCTAssertEqual(packages.map(\.name), ["pnpm", "warp", "docker-desktop"])
+        XCTAssertEqual(packages.count, 3)
+        XCTAssertEqual(packages[0].oldVersion, "11.8.0")
+        XCTAssertEqual(packages[0].newVersion, "11.9.0 (4MB)")
+        XCTAssertEqual(packages[1].oldVersion, "0.2026.06.10.09.27.stable_01")
+        XCTAssertEqual(packages[2].oldVersion, "4.78.0,229452")
+        XCTAssertEqual(packages[2].newVersion, "4.79.0,230596")
+        XCTAssertFalse(packages.contains { $0.name.contains(" ") }, "names must not absorb version/padding")
+        XCTAssertFalse(packages.contains { $0.newVersion == "?" }, "no duplicate '?' placeholder entries")
+    }
+
+    func testParseUpgradeOutputHandlesReportedTwoFormulaColumnAlignedSummary() {
+        // Regression for the reported issue: `uv` + `vim` upgraded but shown as
+        // "4 packages" with ?→? duplicates. Brew padded the old-version column
+        // wider than both versions, so the old single-space split malformed
+        // *both* names (empty oldVersion) and the later "==> Upgrading" lines
+        // spawned a ?/? duplicate for each. With whitespace-run splitting both
+        // parse clean and dedupe.
+        let pad = { (text: String, width: Int) in
+            text + String(repeating: " ", count: max(1, width - text.count))
+        }
+        let summary = [
+            "==> Upgrading 2 outdated packages:",
+            pad("uv", 5) + pad("0.11.23", 14) + "-> 0.11.24",
+            pad("vim", 5) + pad("9.2.0650", 14) + "-> 9.2.0700",
+            "==> Upgrading uv",
+            "==> Upgrading vim"
+        ].joined(separator: "\n")
+
+        let packages = BrewService.parseUpgradeOutput(summary)
+
+        XCTAssertEqual(packages.map(\.name), ["uv", "vim"])
+        XCTAssertEqual(packages.count, 2, "two real upgrades must not be reported as four")
+        XCTAssertEqual(packages[0].oldVersion, "0.11.23")
+        XCTAssertEqual(packages[0].newVersion, "0.11.24")
+        XCTAssertEqual(packages[1].oldVersion, "9.2.0650")
+        XCTAssertEqual(packages[1].newVersion, "9.2.0700")
+        XCTAssertFalse(packages.contains { $0.newVersion == "?" }, "no '?' duplicate entries")
+    }
+
     func testUpgradingPackageNameIgnoresSummaryLines() {
         XCTAssertNil(BrewService.upgradingPackageName(from: "==> Upgrading 3 outdated packages:"))
         XCTAssertEqual(
@@ -259,6 +322,79 @@ final class BrewServiceTests: XCTestCase {
         let filtered = result.excludingPackagesStillOutdated(stillOutdated)
 
         XCTAssertEqual(filtered.packages.map(\.name), ["pnpm"])
+    }
+
+    func testSanitizedRepairsMalformedAndDuplicatePackages() {
+        // Mirrors a record persisted by the pre-fix parser: real packages whose
+        // names absorbed the old version + padding (with an empty oldVersion),
+        // each shadowed by a duplicate "?"/"?" entry under the clean name.
+        let raw = UpdateResult(
+            packages: [
+                UpgradedPackage(name: "pnpm       11.8.0                  ", oldVersion: "", newVersion: "11.9.0 (4MB)"),
+                UpgradedPackage(name: "warp    ", oldVersion: "0.2026.06.10.09.27.stable_01", newVersion: "0.2026.06.17.09.49.stable_01"),
+                UpgradedPackage(name: "docker-desktop  4.78.0,229452            ", oldVersion: "", newVersion: "4.79.0,230596"),
+                UpgradedPackage(name: "pnpm", oldVersion: "?", newVersion: "?"),
+                UpgradedPackage(name: "warp", oldVersion: "?", newVersion: "?"),
+                UpgradedPackage(name: "docker-desktop", oldVersion: "?", newVersion: "?")
+            ],
+            timestamp: Date()
+        )
+
+        let clean = raw.sanitized()
+
+        XCTAssertEqual(clean.packages.map(\.name), ["pnpm", "warp", "docker-desktop"])
+        XCTAssertEqual(clean.count, 3)
+        XCTAssertEqual(clean.packages[0].oldVersion, "11.8.0", "should recover old version leaked into the name")
+        XCTAssertEqual(clean.packages[0].newVersion, "11.9.0 (4MB)")
+        XCTAssertEqual(clean.packages[1].oldVersion, "0.2026.06.10.09.27.stable_01")
+        XCTAssertEqual(clean.packages[2].oldVersion, "4.78.0,229452")
+        XCTAssertFalse(clean.packages.contains { $0.newVersion == "?" }, "duplicate '?' entries should be collapsed")
+        XCTAssertFalse(clean.packages.contains { $0.name.contains(" ") }, "names should be trimmed clean")
+    }
+
+    func testSanitizedLeavesCleanHistoryUnchanged() {
+        // Clean records — including a genuine unknown-version entry that has no
+        // duplicate — must pass through untouched (sanitizing is idempotent).
+        let result = UpdateResult(
+            packages: [
+                UpgradedPackage(name: "docker-desktop", oldVersion: "4.78.0,229452", newVersion: "4.79.0,230596"),
+                UpgradedPackage(name: "gh", oldVersion: "2.94.0", newVersion: "2.95.0"),
+                UpgradedPackage(name: "sdl2-compat", oldVersion: "?", newVersion: "?")
+            ],
+            timestamp: Date()
+        )
+
+        let sanitized = result.sanitized()
+
+        XCTAssertEqual(sanitized.packages.map(\.name), ["docker-desktop", "gh", "sdl2-compat"])
+        XCTAssertEqual(sanitized.packages.map(\.oldVersion), ["4.78.0,229452", "2.94.0", "?"])
+        XCTAssertEqual(sanitized.packages.map(\.newVersion), ["4.79.0,230596", "2.95.0", "?"])
+    }
+
+    func testSanitizedCollapsesReportedUvVimHistoryRecord() {
+        // Regression for the reported issue, modelled on the exact History view
+        // shown in the report: uv's old version leaked into its name (empty
+        // oldVersion), vim parsed clean, and each has a shadow "?"/"?" entry.
+        // After loading, the record must collapse back to the two real updates.
+        let raw = UpdateResult(
+            packages: [
+                UpgradedPackage(name: "uv  0.11.23", oldVersion: "", newVersion: "0.11.24"),
+                UpgradedPackage(name: "vim", oldVersion: "9.2.0650", newVersion: "9.2.0700"),
+                UpgradedPackage(name: "uv", oldVersion: "?", newVersion: "?"),
+                UpgradedPackage(name: "vim", oldVersion: "?", newVersion: "?")
+            ],
+            timestamp: Date()
+        )
+
+        let clean = raw.sanitized()
+
+        XCTAssertEqual(clean.count, 2, "the two real packages must not be reported as four")
+        XCTAssertEqual(clean.packages.map(\.name), ["uv", "vim"])
+        XCTAssertEqual(clean.packages[0].oldVersion, "0.11.23", "uv's leaked old version should be recovered")
+        XCTAssertEqual(clean.packages[0].newVersion, "0.11.24")
+        XCTAssertEqual(clean.packages[1].oldVersion, "9.2.0650")
+        XCTAssertEqual(clean.packages[1].newVersion, "9.2.0700")
+        XCTAssertFalse(clean.packages.contains { $0.newVersion == "?" }, "shadow '?' rows should be gone")
     }
 
     func testGreedyUpdateRunsRegularUpgradeBeforeGreedyUpgrade() {
