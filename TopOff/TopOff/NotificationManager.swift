@@ -56,4 +56,19 @@ class NotificationManager {
         }
         sendCompletionNotification(success: success, title: title, body: resolvedBody)
     }
+
+    func showUpdatesAvailableNotification(count: Int) {
+        guard let body = Self.updatesAvailableNotificationBody(count: count) else { return }
+        sendCompletionNotification(
+            success: true,
+            title: "TopOff",
+            body: body
+        )
+    }
+
+    static func updatesAvailableNotificationBody(count: Int) -> String? {
+        guard count > 0 else { return nil }
+        let noun = count == 1 ? "update" : "updates"
+        return "\(count) Homebrew \(noun) available"
+    }
 }

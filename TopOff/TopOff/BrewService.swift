@@ -726,7 +726,7 @@ final class BrewService: @unchecked Sendable {
         try await withCheckedThrowingContinuation { continuation in
             let process = Process()
             let pipe = Pipe()
-            let outputData = NSMutableData()
+            let outputBuffer = OutputBuffer()
 
             process.executableURL = URL(fileURLWithPath: command)
             process.arguments = arguments
@@ -741,7 +741,7 @@ final class BrewService: @unchecked Sendable {
             pipe.fileHandleForReading.readabilityHandler = { handle in
                 let data = handle.availableData
                 guard !data.isEmpty else { return }
-                outputData.append(data)
+                outputBuffer.append(data)
                 if let text = String(data: data, encoding: .utf8) {
                     let lines = text.components(separatedBy: .newlines)
                     for line in lines where !line.isEmpty {
@@ -754,10 +754,10 @@ final class BrewService: @unchecked Sendable {
                 pipe.fileHandleForReading.readabilityHandler = nil
                 let remainingData = pipe.fileHandleForReading.readDataToEndOfFile()
                 if !remainingData.isEmpty {
-                    outputData.append(remainingData)
+                    outputBuffer.append(remainingData)
                 }
 
-                let output = String(data: outputData as Data, encoding: .utf8) ?? ""
+                let output = outputBuffer.string()
 
                 if process.terminationStatus == 0 {
                     continuation.resume(returning: output)
@@ -1000,6 +1000,24 @@ final class BrewService: @unchecked Sendable {
             let pid = p.processIdentifier
             kill(-pid, SIGKILL)   // group
             kill(pid, SIGKILL)    // process itself, in case it isn't a group leader
+        }
+    }
+
+    private final class OutputBuffer: @unchecked Sendable {
+        private let lock = NSLock()
+        private var data = Data()
+
+        func append(_ newData: Data) {
+            lock.lock()
+            data.append(newData)
+            lock.unlock()
+        }
+
+        func string() -> String {
+            lock.lock()
+            let snapshot = data
+            lock.unlock()
+            return String(data: snapshot, encoding: .utf8) ?? ""
         }
     }
 

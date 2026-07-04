@@ -113,6 +113,86 @@ final class MenuBarViewModelSkipListTests: XCTestCase {
                        "launch-at-login changes should route through the injected manager, not SMAppService")
     }
 
+    func testShouldRunHomebrewCheckWhenNoPreviousCheckExists() {
+        let vm = MenuBarViewModel(skipInitialChecks: true, defaults: defaults)
+
+        XCTAssertTrue(vm.shouldRunHomebrewCheck(now: Date(timeIntervalSince1970: 10_000)))
+    }
+
+    func testShouldNotRunHomebrewCheckInsideMinimumInterval() {
+        let now = Date(timeIntervalSince1970: 20_000)
+        let vm = MenuBarViewModel(skipInitialChecks: true, defaults: defaults)
+        vm.lastHomebrewCheckDate = now.addingTimeInterval(-MenuBarViewModel.minimumHomebrewCheckInterval + 1)
+
+        XCTAssertFalse(vm.shouldRunHomebrewCheck(now: now))
+    }
+
+    func testShouldRunHomebrewCheckAtMinimumIntervalBoundary() {
+        let now = Date(timeIntervalSince1970: 20_000)
+        let vm = MenuBarViewModel(skipInitialChecks: true, defaults: defaults)
+        vm.lastHomebrewCheckDate = now.addingTimeInterval(-MenuBarViewModel.minimumHomebrewCheckInterval)
+
+        XCTAssertTrue(vm.shouldRunHomebrewCheck(now: now))
+    }
+
+    func testGreedyOverrideForcesGreedyCheck() {
+        let vm = MenuBarViewModel(skipInitialChecks: true, defaults: defaults)
+        vm.greedyModeEnabled = false
+
+        XCTAssertFalse(vm.resolvedGreedyMode(greedyOverride: nil))
+        XCTAssertTrue(vm.resolvedGreedyMode(greedyOverride: true))
+    }
+
+    func testSelectingUnlockModeStopsPeriodicChecks() {
+        defaults.set(AutomaticCheckMode.periodic.rawValue, forKey: AutomaticCheckMode.userDefaultsKey)
+        defaults.set(3600.0, forKey: "checkInterval")
+        let vm = MenuBarViewModel(skipInitialChecks: true, defaults: defaults)
+
+        vm.startPeriodicChecks()
+        XCTAssertTrue(vm.hasActivePeriodicCheckTimer)
+
+        vm.automaticCheckMode = .afterUnlock
+
+        XCTAssertFalse(vm.hasActivePeriodicCheckTimer)
+    }
+
+    func testSelectingPeriodicModeCancelsPendingUnlockCheck() {
+        let now = Date(timeIntervalSince1970: 20_000)
+        let vm = MenuBarViewModel(skipInitialChecks: true, defaults: defaults)
+        vm.automaticCheckMode = .afterUnlock
+        vm.lastHomebrewCheckDate = now.addingTimeInterval(-MenuBarViewModel.minimumHomebrewCheckInterval)
+
+        vm.scheduleCheckAfterUnlock(now: now)
+        XCTAssertTrue(vm.hasPendingUnlockCheck)
+
+        vm.automaticCheckMode = .periodic
+
+        XCTAssertFalse(vm.hasPendingUnlockCheck)
+    }
+
+    func testUnlockCheckDoesNotScheduleInsideMinimumInterval() {
+        let now = Date(timeIntervalSince1970: 20_000)
+        let vm = MenuBarViewModel(skipInitialChecks: true, defaults: defaults)
+        vm.automaticCheckMode = .afterUnlock
+        vm.lastHomebrewCheckDate = now.addingTimeInterval(-MenuBarViewModel.minimumHomebrewCheckInterval + 1)
+
+        vm.scheduleCheckAfterUnlock(now: now)
+
+        XCTAssertFalse(vm.hasPendingUnlockCheck)
+    }
+
+    func testUpdatesAvailableNotificationBodySkipsZeroCount() {
+        XCTAssertNil(NotificationManager.updatesAvailableNotificationBody(count: 0))
+        XCTAssertEqual(
+            NotificationManager.updatesAvailableNotificationBody(count: 1),
+            "1 Homebrew update available"
+        )
+        XCTAssertEqual(
+            NotificationManager.updatesAvailableNotificationBody(count: 7),
+            "7 Homebrew updates available"
+        )
+    }
+
     func testLoadUpdateHistoryHealsReportedCorruptedRecordOnLaunch() throws {
         // Simulate launching the app with hunter-nl's corrupted history already
         // persisted, then drive the REAL init -> loadUpdateHistory path and show

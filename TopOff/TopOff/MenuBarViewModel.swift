@@ -32,6 +32,42 @@ enum MenuBarIconState {
     }
 }
 
+enum AutomaticCheckMode: String, CaseIterable, Identifiable {
+    case afterUnlock
+    case periodic
+
+    static let userDefaultsKey = "automaticCheckMode"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .afterUnlock:
+            return "After Unlock"
+        case .periodic:
+            return "Periodic"
+        }
+    }
+
+    static func stored(in defaults: UserDefaults = .standard) -> AutomaticCheckMode {
+        if let rawValue = defaults.string(forKey: userDefaultsKey),
+           let mode = AutomaticCheckMode(rawValue: rawValue) {
+            return mode
+        }
+
+        if defaults.object(forKey: "checkInterval") == nil {
+            return .afterUnlock
+        }
+
+        let interval = defaults.object(forKey: "checkInterval") as? TimeInterval ?? 0
+        return interval > 0 ? .periodic : .afterUnlock
+    }
+
+    func save(in defaults: UserDefaults = .standard) {
+        defaults.set(rawValue, forKey: Self.userDefaultsKey)
+    }
+}
+
 /// Abstraction over the system "launch at login" registration. Injecting this
 /// lets `MenuBarViewModel` be unit-tested without mutating the user's real
 /// login items through `SMAppService`.
@@ -57,6 +93,8 @@ struct SMAppServiceLaunchAtLogin: LaunchAtLoginManaging {
 @MainActor
 final class MenuBarViewModel: ObservableObject {
     static let appUpdateCheckInterval: TimeInterval = 21_600
+    static let unlockCheckDelay: TimeInterval = 60
+    static let minimumHomebrewCheckInterval: TimeInterval = 60
 
     @Published var iconState: MenuBarIconState = .upToDate {
         didSet {
@@ -77,7 +115,13 @@ final class MenuBarViewModel: ObservableObject {
     @Published var checkInterval: TimeInterval {
         didSet {
             defaults.set(checkInterval, forKey: "checkInterval")
-            restartPeriodicChecks()
+            configureAutomaticChecks()
+        }
+    }
+    @Published var automaticCheckMode: AutomaticCheckMode {
+        didSet {
+            automaticCheckMode.save(in: defaults)
+            configureAutomaticChecks()
         }
     }
     @Published var launchAtLogin: Bool {
@@ -131,6 +175,9 @@ final class MenuBarViewModel: ObservableObject {
     private var checkTimer: Timer?
     private var appUpdateCheckTimer: Timer?
     private var iconAnimationTimer: Timer?
+    private var unlockSessionObserver: NSObjectProtocol?
+    private var screenUnlockObserver: NSObjectProtocol?
+    private var pendingUnlockCheckTask: Task<Void, Never>?
     private var spinnerFrames: [NSImage] = []
     private var spinnerFrameIndex = 0
     @Published private var initialCheckSucceeded = false
@@ -144,6 +191,7 @@ final class MenuBarViewModel: ObservableObject {
         self.loginItemManager = loginItemManager
         self.launchAtLogin = defaults.bool(forKey: "launchAtLogin")
         self.checkInterval = defaults.object(forKey: "checkInterval") as? TimeInterval ?? 14400
+        self.automaticCheckMode = AutomaticCheckMode.stored(in: defaults)
         // Default to true for auto cleanup — UserDefaults.bool returns false if key doesn't exist
         if defaults.object(forKey: "autoCleanupEnabled") == nil {
             self.autoCleanupEnabled = true
@@ -159,16 +207,19 @@ final class MenuBarViewModel: ObservableObject {
         defaults.removeObject(forKey: "packagesNeedingAttention")
         notificationManager.requestPermission()
 
-        // Start network monitor to handle connectivity restoration
-        startNetworkMonitoring()
-
         guard !skipInitialChecks else { return }
 
-        // Check for updates on launch
-        Task {
-            let success = await checkForUpdates()
-            initialCheckSucceeded = success
-            startPeriodicChecks()
+        startUnlockSessionObserving()
+        configureAutomaticChecks()
+
+        if automaticCheckMode == .periodic {
+            // Check for updates on launch when periodic checks are the active automatic mode.
+            startNetworkMonitoring()
+            Task {
+                let success = await checkForUpdates()
+                initialCheckSucceeded = success
+                configureAutomaticChecks()
+            }
         }
 
         // Check for app updates from GitHub
@@ -429,19 +480,31 @@ final class MenuBarViewModel: ObservableObject {
     }
 
     @discardableResult
-    func checkForUpdates() async -> Bool {
+    func checkForUpdates(
+        greedyOverride: Bool? = nil,
+        respectMinimumInterval: Bool = false,
+        notifyIfUpdatesAvailable: Bool = false
+    ) async -> Bool {
         guard !isRunning else { return false }
+        if respectMinimumInterval, !shouldRunHomebrewCheck() {
+            return false
+        }
 
         isRunning = true
         iconState = .checking
         statusMessage = "Checking for updates..."
+        markHomebrewCheckAttempted()
 
         var success = false
         do {
-            let refreshedOutdatedPackages = try await brewService.checkOutdated(greedy: greedyModeEnabled)
+            let shouldCheckGreedy = resolvedGreedyMode(greedyOverride: greedyOverride)
+            let refreshedOutdatedPackages = try await brewService.checkOutdated(greedy: shouldCheckGreedy)
             outdatedPackages = refreshedOutdatedPackages
             skippedPackages = []
             updateIconState()
+            if notifyIfUpdatesAvailable {
+                notificationManager.showUpdatesAvailableNotification(count: visibleOutdatedPackages.count)
+            }
             success = true
         } catch {
             iconState = .upToDate
@@ -451,6 +514,30 @@ final class MenuBarViewModel: ObservableObject {
         statusMessage = nil
         isRunning = false
         return success
+    }
+
+    func shouldRunHomebrewCheck(now: Date = Date()) -> Bool {
+        guard let lastCheck = lastHomebrewCheckDate else {
+            return true
+        }
+        return now.timeIntervalSince(lastCheck) >= Self.minimumHomebrewCheckInterval
+    }
+
+    func resolvedGreedyMode(greedyOverride: Bool?) -> Bool {
+        greedyOverride ?? greedyModeEnabled
+    }
+
+    var lastHomebrewCheckDate: Date? {
+        get {
+            defaults.object(forKey: "lastHomebrewCheckDate") as? Date
+        }
+        set {
+            if let newValue {
+                defaults.set(newValue, forKey: "lastHomebrewCheckDate")
+            } else {
+                defaults.removeObject(forKey: "lastHomebrewCheckDate")
+            }
+        }
     }
 
     func checkForAppUpdate() {
@@ -706,6 +793,7 @@ final class MenuBarViewModel: ObservableObject {
     func startPeriodicChecks() {
         stopPeriodicChecks()
 
+        guard automaticCheckMode == .periodic else { return }
         guard checkInterval > 0 else { return }
 
         checkTimer = Timer.scheduledTimer(withTimeInterval: checkInterval, repeats: true) { [weak self] _ in
@@ -730,15 +818,90 @@ final class MenuBarViewModel: ObservableObject {
         }
     }
 
-    private func restartPeriodicChecks() {
-        startPeriodicChecks()
+    private func configureAutomaticChecks() {
+        switch automaticCheckMode {
+        case .afterUnlock:
+            stopPeriodicChecks()
+        case .periodic:
+            cancelPendingUnlockCheck()
+            startPeriodicChecks()
+        }
+    }
+
+    private func startUnlockSessionObserving() {
+        if unlockSessionObserver == nil {
+            unlockSessionObserver = NSWorkspace.shared.notificationCenter.addObserver(
+                forName: NSWorkspace.sessionDidBecomeActiveNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.scheduleCheckAfterUnlock()
+                }
+            }
+        }
+
+        if screenUnlockObserver == nil {
+            screenUnlockObserver = DistributedNotificationCenter.default().addObserver(
+                forName: Notification.Name("com.apple.screenIsUnlocked"),
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.scheduleCheckAfterUnlock()
+                }
+            }
+        }
+    }
+
+    func scheduleCheckAfterUnlock(now: Date = Date()) {
+        cancelPendingUnlockCheck()
+        guard automaticCheckMode == .afterUnlock else { return }
+        guard shouldRunHomebrewCheck(now: now) else { return }
+
+        pendingUnlockCheckTask = Task { [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: Self.nanoseconds(for: Self.unlockCheckDelay))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            await self?.runUnlockTriggeredCheckIfNeeded()
+            self?.clearFinishedUnlockCheckTask()
+        }
+    }
+
+    private func runUnlockTriggeredCheckIfNeeded() async {
+        guard automaticCheckMode == .afterUnlock else { return }
+        await checkForUpdates(
+            greedyOverride: true,
+            respectMinimumInterval: true,
+            notifyIfUpdatesAvailable: true
+        )
+    }
+
+    private func cancelPendingUnlockCheck() {
+        pendingUnlockCheckTask?.cancel()
+        pendingUnlockCheckTask = nil
+    }
+
+    private func clearFinishedUnlockCheckTask() {
+        pendingUnlockCheckTask = nil
+    }
+
+    private func markHomebrewCheckAttempted(now: Date = Date()) {
+        lastHomebrewCheckDate = now
+    }
+
+    private static func nanoseconds(for interval: TimeInterval) -> UInt64 {
+        UInt64(interval * 1_000_000_000)
     }
 
     private func startNetworkMonitoring() {
         networkMonitor.startMonitoring { [weak self] in
             guard let self else { return }
             // Only trigger check if initial check failed due to no connectivity
-            if !self.initialCheckSucceeded {
+            if self.automaticCheckMode == .periodic, !self.initialCheckSucceeded {
                 self.initialCheckSucceeded = true  // Prevent repeated triggers
                 Task { @MainActor in
                     await self.checkForUpdates()
@@ -759,11 +922,11 @@ final class MenuBarViewModel: ObservableObject {
     private func startIconAnimation() {
         // No-op. The previous timer-based approach published a new NSImage
         // onto `spinnerFrame` every 100 ms, which made `objectWillChange`
-        // fire constantly and forced the menu tree to reconcile 10× per
-        // second — breaking NSMenu's hover-to-open-submenu delay. The
-        // visual spinning is now handled by a SwiftUI animation in the
-        // `SpinningArrowsLabel` view in `TopOffApp.swift`, which keeps its
-        // rotation state local and does not invalidate the menu content.
+        // fire constantly and forced the menu tree to reconcile 10x per
+        // second - breaking NSMenu's hover-to-open-submenu delay. The
+        // visual spinning is handled by `SpinningArrowsLabel` in
+        // `TopOffApp.swift`, which keeps its rotation state local and does
+        // not invalidate the menu content.
     }
 
     private func stopIconAnimation() {
@@ -841,6 +1004,14 @@ final class MenuBarViewModel: ObservableObject {
             return []
         }
         return Set(array)
+    }
+
+    var hasActivePeriodicCheckTimer: Bool {
+        checkTimer != nil
+    }
+
+    var hasPendingUnlockCheck: Bool {
+        pendingUnlockCheckTask != nil
     }
 
 }

@@ -31,11 +31,7 @@ struct TopOffApp: App {
 
             // Outdated packages with version details
             if !viewModel.visibleOutdatedPackages.isEmpty {
-                let visible = viewModel.visibleOutdatedPackages
-                let displayPackages = Array(visible.prefix(5))
-                let overflow = visible.count - displayPackages.count
-
-                ForEach(displayPackages) { package in
+                ForEach(viewModel.visibleOutdatedPackages) { package in
                     Menu(package.name) {
                         Button("Update") {
                             viewModel.upgradePackage(package)
@@ -44,11 +40,6 @@ struct TopOffApp: App {
                             viewModel.skipPackage(package)
                         }
                     }
-                }
-
-                if overflow > 0 {
-                    Text("...and \(overflow) more")
-                        .foregroundStyle(.secondary)
                 }
 
                 Divider()
@@ -89,13 +80,21 @@ struct TopOffApp: App {
                     Text("Last Update: No changes")
                         .foregroundStyle(.secondary)
                 } else {
+                    let displayPackages = Array(result.packages.prefix(5))
+                    let overflow = result.packages.count - displayPackages.count
+
                     Text("Last Update (\(result.count) package\(result.count == 1 ? "" : "s")):")
                         .foregroundStyle(.secondary)
-                    ForEach(result.packages) { package in
+                    ForEach(displayPackages) { package in
                         Text(package.name).fontWeight(.medium)
                             + Text(" \(DisplayVersion.abbreviate(package.newVersion))")
                                 .font(.callout)
                                 .foregroundStyle(.secondary)
+                    }
+
+                    if overflow > 0 {
+                        Text("...and \(overflow) more")
+                            .foregroundStyle(.secondary)
                     }
                 }
 
@@ -161,12 +160,19 @@ struct TopOffApp: App {
 
                 Divider()
 
-                Picker("Check Interval", selection: $viewModel.checkInterval) {
-                    Text("Every Hour").tag(3600.0 as TimeInterval)
-                    Text("Every 4 Hours").tag(14400.0 as TimeInterval)
-                    Text("Every 12 Hours").tag(43200.0 as TimeInterval)
-                    Text("Every 24 Hours").tag(86400.0 as TimeInterval)
-                    Text("Manual Only").tag(0.0 as TimeInterval)
+                Picker("Check Mode", selection: $viewModel.automaticCheckMode) {
+                    ForEach(AutomaticCheckMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode)
+                    }
+                }
+
+                if viewModel.automaticCheckMode == .periodic {
+                    Picker("Check Interval", selection: $viewModel.checkInterval) {
+                        Text("Every Hour").tag(3600.0 as TimeInterval)
+                        Text("Every 4 Hours").tag(14400.0 as TimeInterval)
+                        Text("Every 12 Hours").tag(43200.0 as TimeInterval)
+                        Text("Every 24 Hours").tag(86400.0 as TimeInterval)
+                    }
                 }
 
                 Divider()
@@ -236,6 +242,7 @@ struct TopOffApp: App {
 
         return "\(marker) \(item.name) \(DisplayVersion.abbreviate(item.currentVersion)) → \(DisplayVersion.abbreviate(item.latestVersion))"
     }
+
 }
 
 /// Menu-bar icon shown while a check or update is in flight.
@@ -248,12 +255,12 @@ struct TopOffApp: App {
 ///    does NOT honor SwiftUI's animation system. `withAnimation` rotation
 ///    is silently no-op'd; `TimelineView` renders blank.
 /// 2. Any spinner driven by `@Published` on the view model fires
-///    `objectWillChange` ~10× per second, which forces the entire
+///    `objectWillChange` ~10x per second, which forces the entire
 ///    `MenuBarExtra` menu content closure to reconcile and breaks NSMenu's
 ///    hover-to-open-submenu delay on the outdated package rows.
 ///
-/// Core Animation runs the rotation on the render server — zero SwiftUI
-/// state changes, zero menu invalidations — so the icon spins continuously
+/// Core Animation runs the rotation on the render server - zero SwiftUI
+/// state changes, zero menu invalidations - so the icon spins continuously
 /// while the menu's submenu hover behavior remains intact.
 private struct SpinningArrowsLabel: View {
     var body: some View {
@@ -265,7 +272,7 @@ private struct SpinningArrowsLabel: View {
 
 /// Finds the `NSStatusBarButton` created by the app's single `MenuBarExtra`
 /// and runs a Core Animation rotation on its layer. Safe to call
-/// `start()` / `stop()` repeatedly — adding an animation with the same key
+/// `start()` / `stop()` repeatedly - adding an animation with the same key
 /// replaces the existing one, and removing a non-existent animation is a
 /// no-op.
 @MainActor
@@ -307,7 +314,7 @@ final class MenuBarSpinController {
         // SwiftUI's layout pass; mutating the host button's layer in that
         // window causes `NSHostingView` to invalidate, re-push the image,
         // re-run `-[NSStatusItem _adjustLength]`, and bounce SwiftUI into
-        // another layout pass — a runaway loop that makes the menu-bar
+        // another layout pass - a runaway loop that makes the menu-bar
         // slot collapse to zero width and become unclickable.
         DispatchQueue.main.async { [weak self] in
             self?.applyAnimation(attemptsRemaining: 3)
@@ -326,7 +333,7 @@ final class MenuBarSpinController {
         let bounds = layer.bounds
         guard bounds.width > 0, bounds.height > 0 else {
             // Layer hasn't been laid out yet. Try again on the next
-            // runloop turn (a few times only, then give up — better to
+            // runloop turn (a few times only, then give up - better to
             // render a static icon than to spin retrying forever).
             if attemptsRemaining > 0 {
                 DispatchQueue.main.async { [weak self] in
@@ -341,8 +348,8 @@ final class MenuBarSpinController {
         // `position`. The model-layer geometry stays identical to its
         // resting state, so SwiftUI's `NSHostingView` sees no change and
         // doesn't re-push the image. Each keyframe is a composite:
-        //     T(+halfW, +halfH) · R(θ) · T(-halfW, -halfH)
-        // which is equivalent to "rotate around (halfW, halfH)" — the
+        //     T(+halfW, +halfH) . R(theta) . T(-halfW, -halfH)
+        // which is equivalent to "rotate around (halfW, halfH)" - the
         // standard pivot-around-arbitrary-point trick for matrices.
         let halfW = bounds.width / 2.0
         let halfH = bounds.height / 2.0
