@@ -21,7 +21,7 @@ TopOff runs Homebrew from the menu bar so you can check outdated formulae and ca
 - **Menu bar update list** — Shows outdated packages with version changes.
 - **After-unlock checks** — Default check mode. TopOff checks shortly after unlock when the minimum check interval has passed.
 - **Periodic checks** — Optional check mode with 1 hour, 4 hour, 12 hour, or 24 hour intervals.
-- **Update notifications** — Sends a notification only when updates exist; the notification shows the count, and the menu shows the package names.
+- **Update notifications** — Sends a notification only when updates exist, with an **Update All** action. The menu shows the package names.
 - **One-click upgrades** — Run normal `brew upgrade` or greedy upgrades for auto-updating casks.
 - **Selective updates and skips** — Update or skip individual packages, with optional remembered skips.
 - **Progress and history** — Shows the current update progress and the most recent upgraded packages.
@@ -47,7 +47,7 @@ TopOff runs Homebrew from the menu bar so you can check outdated formulae and ca
 
 1. Click the TopOff menu bar icon.
 2. Choose **Check for Updates** to refresh the list.
-3. Choose **Update All**, **Update All (Greedy)**, or update a single package.
+3. Choose **Update All** or update a single package.
 4. Open the menu during an update to see progress.
 
 ## Check Modes
@@ -66,9 +66,9 @@ Some casks, such as browsers or chat apps, have their own auto-updaters and are 
 | Action | Command |
 |--------|---------|
 | Update All | `brew upgrade` |
-| Update All (Greedy) | `brew upgrade`, then `brew upgrade --greedy` |
+| Update All (Greedy Mode on) | `brew upgrade`, then `brew upgrade --greedy` |
 
-When **Greedy Mode** is enabled, checks use `brew outdated --greedy` and the normal **Update All** button is hidden.
+When **Greedy Mode** is enabled, checks use `brew outdated --greedy` and the update button changes to **Update All (Greedy)**.
 
 ## Notes
 

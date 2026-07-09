@@ -895,7 +895,7 @@ final class MenuBarViewModel: ObservableObject {
     private func runUnlockTriggeredCheckIfNeeded() async {
         guard automaticCheckMode == .afterUnlock else { return }
         await checkForUpdates(
-            greedyOverride: true,
+            greedyOverride: nil,
             respectMinimumInterval: true,
             notifyIfUpdatesAvailable: true
         )

@@ -20,27 +20,47 @@ final class HistoryGroupingTests: XCTestCase {
 
     func testSingleDayMakesOneGroup() {
         let history = [result(daysAgo: 0, hour: 10)]
-        let groups = HistoryGrouping.groupHistory(history, calendar: calendar, referenceDate: referenceDate)
+        let groups = HistoryGrouping.groupHistory(
+            history,
+            calendar: calendar,
+            referenceDate: referenceDate,
+            locale: Locale(identifier: "en_US")
+        )
         XCTAssertEqual(groups.count, 1)
-        XCTAssertEqual(groups[0].title, "Today")
+        XCTAssertEqual(groups[0].title, "June 3, 2026")
     }
 
-    func testTodayYesterdayDayNameMonthDayBranches() {
-        // Today, Yesterday, 3 days ago (this week), 60 days ago (this year)
+    func testHistoryGroupTitlesUseExactLocalizedDates() {
         let history = [
             result(daysAgo: 0,  hour: 14),
             result(daysAgo: 1,  hour: 10),
             result(daysAgo: 3,  hour: 11),
             result(daysAgo: 60, hour: 9),
         ]
-        let groups = HistoryGrouping.groupHistory(history, calendar: calendar, referenceDate: referenceDate)
+        let groups = HistoryGrouping.groupHistory(
+            history,
+            calendar: calendar,
+            referenceDate: referenceDate,
+            locale: Locale(identifier: "en_US")
+        )
         XCTAssertEqual(groups.count, 4)
-        XCTAssertEqual(groups[0].title, "Today")
-        XCTAssertEqual(groups[1].title, "Yesterday")
-        // 2026-06-03 minus 3 days = 2026-05-31 (Sunday) — day name within current week branch
-        XCTAssertTrue(groups[2].title.contains("Sunday") || groups[2].title.contains("May 31"))
-        // 2026-06-03 minus 60 days = 2026-04-04 — month-day form
-        XCTAssertTrue(groups[3].title.contains("April") || groups[3].title.contains("Apr"))
+        XCTAssertEqual(groups[0].title, "June 3, 2026")
+        XCTAssertEqual(groups[1].title, "June 2, 2026")
+        XCTAssertEqual(groups[2].title, "May 31, 2026")
+        XCTAssertEqual(groups[3].title, "April 4, 2026")
+    }
+
+    func testHistoryGroupTitlesFollowLocaleOrder() {
+        let history = [result(daysAgo: 0, hour: 14)]
+
+        let groups = HistoryGrouping.groupHistory(
+            history,
+            calendar: calendar,
+            referenceDate: referenceDate,
+            locale: Locale(identifier: "en_GB")
+        )
+
+        XCTAssertEqual(groups.first?.title, "3 June 2026")
     }
 
     func testCrossYearGroupAppendsYear() {

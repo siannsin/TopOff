@@ -5,8 +5,16 @@ import UserNotifications
 @main
 struct TopOffApp: App {
     @NSApplicationDelegateAdaptor(TopOffAppDelegate.self) private var appDelegate
-    @StateObject private var viewModel = MenuBarViewModel()
+    @StateObject private var viewModel: MenuBarViewModel
     @Environment(\.openWindow) private var openWindow
+
+    init() {
+        let viewModel = MenuBarViewModel()
+        _viewModel = StateObject(wrappedValue: viewModel)
+        NotificationActionRouter.shared.updateAllHandler = { [weak viewModel] in
+            viewModel?.updateAll(greedy: false)
+        }
+    }
 
     var body: some Scene {
         MenuBarExtra {
@@ -48,15 +56,8 @@ struct TopOffApp: App {
             }
 
             // Primary actions
-            if !viewModel.greedyModeEnabled {
-                Button("Update All") {
-                    viewModel.updateAll(greedy: false)
-                }
-                .disabled(viewModel.isRunning)
-            }
-
-            Button("Update All (Greedy)") {
-                viewModel.updateAll(greedy: true)
+            Button(viewModel.greedyModeEnabled ? "Update All (Greedy)" : "Update All") {
+                viewModel.updateAll(greedy: false)
             }
             .disabled(viewModel.isRunning)
 
@@ -247,8 +248,22 @@ struct TopOffApp: App {
 
 }
 
+@MainActor
+final class NotificationActionRouter {
+    static let shared = NotificationActionRouter()
+
+    var updateAllHandler: (() -> Void)?
+
+    private init() {}
+
+    func updateAllFromNotification() {
+        updateAllHandler?()
+    }
+}
+
 final class TopOffAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
+        NotificationManager.shared.configureNotificationCategories()
         UNUserNotificationCenter.current().delegate = self
     }
 
@@ -261,6 +276,14 @@ final class TopOffAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificati
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        if response.actionIdentifier == NotificationManager.updateAllActionIdentifier {
+            Task { @MainActor in
+                NotificationActionRouter.shared.updateAllFromNotification()
+                completionHandler()
+            }
+            return
+        }
+
         completionHandler()
     }
 
