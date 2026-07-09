@@ -96,8 +96,10 @@ struct TopOffApp: App {
                     }
 
                     if overflow > 0 {
-                        Text("...and \(overflow) more")
-                            .foregroundStyle(.secondary)
+                        Button("...and \(overflow) more") {
+                            openWindow(id: "history")
+                            NSApp.activate(ignoringOtherApps: true)
+                        }
                     }
                 }
 

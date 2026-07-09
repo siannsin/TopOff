@@ -250,10 +250,10 @@ final class MenuBarViewModel: ObservableObject {
             iconState = .checking
             statusMessage = "Checking for updates..."
             var packagesToUpdate: [OutdatedPackage] = []
+            let shouldUseGreedy = resolvedGreedyMode(greedyOverride: greedy)
 
             do {
-                let shouldCheckGreedy = greedy || greedyModeEnabled
-                let refreshedOutdatedPackages = try await brewService.checkOutdated(greedy: shouldCheckGreedy)
+                let refreshedOutdatedPackages = try await brewService.checkOutdated(greedy: shouldUseGreedy)
                 outdatedPackages = refreshedOutdatedPackages
 
                 packagesToUpdate = updateCandidatePackages()
@@ -270,11 +270,11 @@ final class MenuBarViewModel: ObservableObject {
 
                 let result = try await performUpdates(
                     packagesToUpdate,
-                    greedy: greedy,
+                    greedy: shouldUseGreedy,
                     useAdmin: false
                 )
                 finishUpdateProgress()
-                let completedResult = try await finalizeUpdateResult(result, greedy: greedy)
+                let completedResult = try await finalizeUpdateResult(result, greedy: shouldUseGreedy)
 
                 // Run cleanup if auto cleanup is enabled
                 if autoCleanupEnabled {
@@ -304,11 +304,11 @@ final class MenuBarViewModel: ObservableObject {
                         statusMessage = "Retrying with admin privileges..."
                         let result = try await performUpdates(
                             packagesToUpdate,
-                            greedy: greedy,
+                            greedy: shouldUseGreedy,
                             useAdmin: true
                         )
                         finishUpdateProgress()
-                        let completedResult = try await finalizeUpdateResult(result, greedy: greedy)
+                        let completedResult = try await finalizeUpdateResult(result, greedy: shouldUseGreedy)
 
                         if autoCleanupEnabled {
                             lastCleanupResult = try? await runAutoCleanup()
@@ -330,11 +330,11 @@ final class MenuBarViewModel: ObservableObject {
                         notificationManager.showCompletionNotification(success: true, message: message)
                         updateProgress = nil
                     } catch {
-                        let classified = await reconcileFailedUpdateAttempt(error, greedy: greedy)
+                        let classified = await reconcileFailedUpdateAttempt(error, greedy: shouldUseGreedy)
                         notifyFailure(classified)
                     }
                 } else {
-                    let classified = await reconcileFailedUpdateAttempt(error, greedy: greedy)
+                    let classified = await reconcileFailedUpdateAttempt(error, greedy: shouldUseGreedy)
                     notifyFailure(classified)
                 }
             }
@@ -741,7 +741,7 @@ final class MenuBarViewModel: ObservableObject {
 
     private func finalizeUpdateResult(_ result: UpdateResult, greedy: Bool) async throws -> UpdateResult {
         statusMessage = "Verifying updates..."
-        let refreshedOutdatedPackages = try await brewService.checkOutdated(greedy: greedy || greedyModeEnabled)
+        let refreshedOutdatedPackages = try await brewService.checkOutdated(greedy: greedy, refresh: false)
         markVerifiedProgress(result: result, stillOutdated: refreshedOutdatedPackages)
         let observedResult = result.supplemented(with: updateProgress?.items ?? [])
         let completedResult = observedResult.excludingPackagesStillOutdated(refreshedOutdatedPackages)
