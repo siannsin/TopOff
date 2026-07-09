@@ -10,6 +10,7 @@ enum BrewError: Error, LocalizedError {
     case commandLineToolsRequired(String)
     case brewBusy(String)
     case caskUnavailable(packageName: String?, output: String)
+    case caskArtifactConflict(path: String?, output: String)
 
     var errorDescription: String? {
         switch self {
@@ -29,6 +30,8 @@ enum BrewError: Error, LocalizedError {
             return "Homebrew is busy"
         case .caskUnavailable(let name, _):
             return "\(name ?? "A package") is no longer available"
+        case .caskArtifactConflict:
+            return "Existing app blocks cask upgrade"
         }
     }
 
@@ -50,6 +53,11 @@ enum BrewError: Error, LocalizedError {
             return "Another Homebrew operation is running. Wait a moment and try again."
         case .caskUnavailable:
             return "Homebrew has removed it. Skip it from the menu to stop seeing it as outdated."
+        case .caskArtifactConflict(let path, _):
+            if let path {
+                return "Move or remove \(path), then try again. Avoid zap unless you want to remove app settings."
+            }
+            return "Move or remove the existing app, then try again. Avoid zap unless you want to remove app settings."
         }
     }
 }

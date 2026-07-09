@@ -5,153 +5,77 @@
 <h1 align="center">TopOff</h1>
 
 <p align="center">
-  A lightweight native Mac menu bar app for keeping Homebrew packages up to date.
+  A lightweight macOS menu bar app for checking and updating Homebrew packages.
 </p>
 
 <p align="center">
   Free · MIT licensed · No telemetry · macOS 14+
 </p>
 
-<p align="center">
-  <a href="https://github.com/ihazgithub/TopOff/releases/latest/download/TopOff-v2.0.1.dmg">Download TopOff for macOS</a>
-</p>
+## What It Does
 
-<p align="center">
-  <em>Version 2.0 is here — signed and notarized by Apple, so it installs cleanly on first launch. <a href="CHANGELOG.md">See what's new →</a></em>
-</p>
-
-If you use Homebrew, you have probably forgotten to run `brew update && brew upgrade` for weeks at a time. TopOff checks quietly in the background, shows outdated packages from the menu bar, and lets you update with one click.
+TopOff runs Homebrew from the menu bar so you can check outdated formulae and casks, update everything, or update individual packages without keeping Terminal open.
 
 ## Features
 
-- **One-click updates** — Run `brew update && brew upgrade` from your menu bar
-- **Automatic update checking** — Periodically checks for outdated packages in the background
-- **Smart icon status** — Full mug when up-to-date, half-full when updates are available, animated spinner when actively updating
-- **Real-time progress** — See exactly which package is being updated as it happens — click the menu bar during updates to watch live
-- **Package details at a glance** — See outdated package names and version changes directly in the menu
-- **Selective updates** — Update or skip individual packages
-- **Greedy mode** — Optionally include apps that handle their own updates (Chrome, Slack, etc.) in both scheduled checks and upgrades
-- **Auto cleanup** — Automatically runs standard `brew cleanup` after upgrades, with an optional deep-prune style for power users
-- **Deep cache prune** — Manually run `brew cleanup --prune=all`, or opt Auto Cleanup into it from the Cleanup submenu
-- **Admin retry for protected packages** — If a cask needs admin access, TopOff prompts for your password and retries automatically
-- **Update history** — View recently updated packages with version changes
-- **Configurable check interval** — Check every hour, 4 hours (default), 12 hours, 24 hours, or manually
-- **Launch at login** — Always have TopOff ready
-- **Automatic retry on network restore** — If the app launches without internet (e.g., at startup before WiFi connects), it automatically checks for updates once connectivity is restored
-- **Update notifications** — Checks GitHub for new releases on launch and periodically while running
-- **See what changed** — View upgraded packages and freed disk space in the menu
-
-## Screenshots
-
-![TopOff Demo](TopOff_demo.gif)
-
-The menu bar icon tells you at a glance if updates are available:
-
-| Icon | Meaning |
-|------|---------|
-| Full mug | All packages are up-to-date |
-| Half-full mug | Updates are available (needs a refill!) |
-| Spinning arrows | Checking for updates or updating — click to see live progress |
-| Checkmark | Update completed successfully |
+- **Menu bar update list** — Shows outdated packages with version changes.
+- **After-unlock checks** — Default check mode. TopOff checks shortly after unlock when the minimum check interval has passed.
+- **Periodic checks** — Optional check mode with 1 hour, 4 hour, 12 hour, or 24 hour intervals.
+- **Update notifications** — Sends a notification only when updates exist; the notification shows the count, and the menu shows the package names.
+- **One-click upgrades** — Run normal `brew upgrade` or greedy upgrades for auto-updating casks.
+- **Selective updates and skips** — Update or skip individual packages, with optional remembered skips.
+- **Progress and history** — Shows the current update progress and the most recent upgraded packages.
+- **Auto cleanup** — Optionally runs `brew cleanup` after successful updates, with a deep-prune option.
+- **Admin retry** — Prompts for an administrator password when Homebrew reports a permission failure.
+- **Clearer failure handling** — Keeps partial successful upgrades reflected in the menu and shows specific messages for common cask conflicts, such as an existing app blocking upgrade.
 
 ## Installation
 
-### Download (Recommended)
+### Build From Source
 
-1. Download the [latest DMG](https://github.com/ihazgithub/TopOff/releases/latest/download/TopOff-v2.0.1.dmg)
-2. Open the DMG and drag TopOff to your Applications folder
-3. Launch TopOff. It's signed and notarized by Apple, so it opens immediately on first launch — no trip through Privacy & Security needed.
-
-### Build from Source
-
-1. Clone this repository
-2. Open `TopOff/TopOff.xcodeproj` in Xcode
-3. Build and run (⌘R)
+1. Clone this repository.
+2. Open `TopOff/TopOff.xcodeproj` in Xcode.
+3. Select the `TopOff` scheme.
+4. Build and run with `Cmd+R`.
 
 ### Requirements
 
 - macOS 14.0 or later
-- [Homebrew](https://brew.sh) installed
+- [Homebrew](https://brew.sh)
 
 ## Usage
 
-1. Click the beer mug icon in your menu bar
-2. See which packages need updating with version details
-3. Choose **Update All**, **Update All (Greedy)**, or update individual packages
-4. Watch the icon animate while updates run
-5. Check the menu to see what was upgraded and how much disk space was freed
+1. Click the TopOff menu bar icon.
+2. Choose **Check for Updates** to refresh the list.
+3. Choose **Update All**, **Update All (Greedy)**, or update a single package.
+4. Open the menu during an update to see progress.
 
-### Options
+## Check Modes
 
-All preferences are available under the **Options** submenu:
+TopOff supports one automatic Homebrew check mode at a time:
 
-- **Launch at Login** — Start TopOff when you log in
-- **Auto Cleanup** — Automatically runs standard `brew cleanup` after upgrades (on by default)
-- **Cleanup** — Run standard cleanup, run **Deep Cache Prune…**, or choose the saved **Auto Cleanup Style**
-- **Auto Cleanup Style** — Defaults to standard `brew cleanup`. Power users can opt into `brew cleanup --prune=all` after a confirmation step. This removes Homebrew cached downloads to reclaim more disk space, but does not uninstall apps or command line tools.
-- **Greedy Mode** — Always check and update everything, including apps that auto-update themselves (off by default — see [Greedy Mode explained](#whats-the-difference-between-update-all-and-greedy))
-- **Check Interval** — How often TopOff checks for outdated packages:
-- **View Update History** — See recently updated packages with version changes
+| Mode | Behavior |
+|------|----------|
+| After Unlock | Default. Checks after unlock when enough time has passed since the last check. |
+| Periodic | Checks on the selected interval while TopOff is running. |
 
-| Setting | Behavior |
-|---------|----------|
-| Every hour | Check every 60 minutes |
-| Every 4 hours | Default setting |
-| Every 12 hours | Check twice daily |
-| Every 24 hours | Check once daily |
-| Manual only | Only check when you click "Check for Updates" |
+## Greedy Updates
 
-## What's the difference between Update All and Greedy?
+Some casks, such as browsers or chat apps, have their own auto-updaters and are normally skipped by Homebrew. Greedy mode includes them.
 
-Some casks (Chrome, Slack, VSCode, etc.) have built-in auto-update and are normally skipped by Homebrew. Greedy mode tells Homebrew to update them anyway.
+| Action | Command |
+|--------|---------|
+| Update All | `brew upgrade` |
+| Update All (Greedy) | `brew upgrade`, then `brew upgrade --greedy` |
 
-**By default**, TopOff gives you both options:
+When **Greedy Mode** is enabled, checks use `brew outdated --greedy` and the normal **Update All** button is hidden.
 
-| Button | Command | What it does |
-|--------|---------|--------------|
-| Update All | `brew upgrade` | Updates packages that don't auto-update themselves |
-| Update All (Greedy) | `brew upgrade`, then `brew upgrade --greedy` | Updates everything, including apps that auto-update |
+## Notes
 
-Scheduled background checks use normal mode, so those auto-updating apps won't show up as outdated.
-
-**With Greedy Mode enabled** (in Options), TopOff switches to greedy everywhere:
-
-- Scheduled checks use `brew outdated --greedy` so auto-updating apps appear as outdated
-- The normal "Update All" button is hidden since "Update All (Greedy)" covers everything
-- This is ideal if you prefer Homebrew to manage all your app updates in one place
-
-Greedy Mode is off by default. You can toggle it anytime under **Options > Greedy Mode**.
-
-## Privacy & Network Connections
-
-TopOff makes only one network connection:
-
-- **GitHub API** (`api.github.com`) — Checks for new TopOff releases on launch and periodically while running
-
-That's it. No analytics, no telemetry, no tracking.
-
-### Why does my firewall show other connections?
-
-If you use a firewall like Little Snitch or Lulu, you may see TopOff associated with connections to other servers (e.g., InfluxData, Google, etc.). **These connections are from Homebrew, not TopOff.**
-
-When TopOff runs `brew update` or `brew upgrade`, it spawns Homebrew as a child process. Firewalls often attribute child process network activity to the parent app. These connections may come from:
-
-- Homebrew's own analytics (can be disabled with `brew analytics off`)
-- Specific formulas or casks being updated that have telemetry
-- Package download servers
-
-You can safely allow or deny these connections based on your preferences — denying them won't affect TopOff's functionality.
-
-## License
-
-MIT License - feel free to use, modify, and distribute.
+- TopOff does not auto-fix cask conflicts by force-reinstalling apps. If Homebrew reports an existing app conflict, TopOff shows the path so you can decide whether to move, remove, or reinstall it.
+- Homebrew network activity may appear under TopOff in firewall tools because TopOff runs `brew` as a child process.
+- TopOff checks GitHub for app updates, but does not include analytics or telemetry.
 
 ## Attribution
 
-TopOff is open source under the MIT License.
-
-If you use, fork, or build on TopOff, attribution to Thomas Haslam and a link to the original project are appreciated where practical, such as in your README, credits, or release notes.
-
-## Credits
-
-Created by **Thomas Haslam**
+This fork builds on the original TopOff project by Thomas Haslam. TopOff is released under the MIT License.

@@ -94,7 +94,7 @@ struct SMAppServiceLaunchAtLogin: LaunchAtLoginManaging {
 final class MenuBarViewModel: ObservableObject {
     static let appUpdateCheckInterval: TimeInterval = 21_600
     static let unlockCheckDelay: TimeInterval = 60
-    static let minimumHomebrewCheckInterval: TimeInterval = 60
+    static let minimumHomebrewCheckInterval: TimeInterval = 14_400
 
     @Published var iconState: MenuBarIconState = .upToDate {
         didSet {
@@ -330,16 +330,12 @@ final class MenuBarViewModel: ObservableObject {
                         notificationManager.showCompletionNotification(success: true, message: message)
                         updateProgress = nil
                     } catch {
-                        statusMessage = nil
-                        updateProgress = nil
-                        iconState = outdatedPackages.isEmpty ? .upToDate : .updatesAvailable
-                        notifyFailure(error)
+                        let classified = await reconcileFailedUpdateAttempt(error, greedy: greedy)
+                        notifyFailure(classified)
                     }
                 } else {
-                    statusMessage = nil
-                    updateProgress = nil
-                    iconState = outdatedPackages.isEmpty ? .upToDate : .updatesAvailable
-                    notifyFailure(error)
+                    let classified = await reconcileFailedUpdateAttempt(error, greedy: greedy)
+                    notifyFailure(classified)
                 }
             }
 
@@ -596,6 +592,8 @@ final class MenuBarViewModel: ObservableObject {
                 return output
             case .caskUnavailable(_, let output):
                 return output
+            case .caskArtifactConflict(_, let output):
+                return output
             }
         }
         return error.localizedDescription
@@ -756,6 +754,29 @@ final class MenuBarViewModel: ObservableObject {
         skippedPackages = []
 
         return completedResult
+    }
+
+    private func reconcileFailedUpdateAttempt(_ error: Error, greedy: Bool) async -> BrewError {
+        let output = extractErrorOutput(from: error)
+        let classified = BrewError.classify(output: output)
+        let parsedResult = UpdateResult(
+            packages: BrewService.parseUpgradeOutput(output),
+            timestamp: Date()
+        )
+
+        finishUpdateProgress()
+
+        do {
+            _ = try await finalizeUpdateResult(parsedResult, greedy: greedy)
+        } catch {
+            // Keep the original upgrade error for the notification. A failed
+            // verification should not hide the Homebrew failure the user can act on.
+        }
+
+        statusMessage = nil
+        updateProgress = nil
+        updateIconState()
+        return classified
     }
 
     private func markVerifiedProgress(result: UpdateResult, stillOutdated: [OutdatedPackage]) {

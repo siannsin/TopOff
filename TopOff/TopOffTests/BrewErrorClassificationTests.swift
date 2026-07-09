@@ -54,6 +54,19 @@ final class BrewErrorClassificationTests: XCTestCase {
         }
     }
 
+    func testClassifiesExistingAppArtifactConflict() {
+        let output = """
+        Warning: Reverting upgrade for Cask stats
+        Error: stats: It seems there is already an App at '/Applications/Stats.app'.
+        """
+
+        if case .caskArtifactConflict(let path, _) = BrewError.classify(output: output) {
+            XCTAssertEqual(path, "/Applications/Stats.app")
+        } else {
+            XCTFail("Expected .caskArtifactConflict")
+        }
+    }
+
     func testFallsBackToCommandFailed() {
         let output = "Something genuinely novel that we have no pattern for."
         if case .commandFailed = BrewError.classify(output: output) {} else {
@@ -82,6 +95,7 @@ final class BrewErrorClassificationTests: XCTestCase {
             .commandLineToolsRequired(""),
             .brewBusy(""),
             .caskUnavailable(packageName: nil, output: ""),
+            .caskArtifactConflict(path: "/Applications/Stats.app", output: ""),
         ]
         for err in cases {
             XCTAssertNotNil(err.errorDescription, "Missing errorDescription for \(err)")

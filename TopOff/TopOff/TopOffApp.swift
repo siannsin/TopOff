@@ -1,8 +1,10 @@
 import AppKit
 import SwiftUI
+import UserNotifications
 
 @main
 struct TopOffApp: App {
+    @NSApplicationDelegateAdaptor(TopOffAppDelegate.self) private var appDelegate
     @StateObject private var viewModel = MenuBarViewModel()
     @Environment(\.openWindow) private var openWindow
 
@@ -243,6 +245,51 @@ struct TopOffApp: App {
         return "\(marker) \(item.name) \(DisplayVersion.abbreviate(item.currentVersion)) → \(DisplayVersion.abbreviate(item.latestVersion))"
     }
 
+}
+
+final class TopOffAppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        UNUserNotificationCenter.current().delegate = self
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        terminateIfAnotherTopOffInstanceIsRunning()
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        completionHandler()
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
+    }
+
+    private func terminateIfAnotherTopOffInstanceIsRunning() {
+        guard !ProcessInfo.processInfo.environment.keys.contains("XCTestConfigurationFilePath") else {
+            return
+        }
+        guard let bundleIdentifier = Bundle.main.bundleIdentifier else { return }
+
+        let currentProcessIdentifier = ProcessInfo.processInfo.processIdentifier
+        let alreadyRunning = NSRunningApplication
+            .runningApplications(withBundleIdentifier: bundleIdentifier)
+            .contains { application in
+                application.processIdentifier != currentProcessIdentifier
+                    && !application.isTerminated
+            }
+
+        if alreadyRunning {
+            NSApplication.shared.terminate(nil)
+        }
+    }
 }
 
 /// Menu-bar icon shown while a check or update is in flight.

@@ -48,6 +48,14 @@ extension BrewError {
             return .caskUnavailable(packageName: extractCaskName(from: output), output: output)
         }
 
+        if matchesAny(lower, [
+            "it seems there is already an app at",
+            "it seems there is already a binary at",
+            "it seems there is already an artifact at",
+        ]) {
+            return .caskArtifactConflict(path: extractExistingArtifactPath(from: output), output: output)
+        }
+
         // Permission patterns last (current isPermissionError, folded in)
         if matchesAny(lower, [
             "permission denied",
@@ -86,5 +94,21 @@ extension BrewError {
             }
         }
         return nil
+    }
+
+    private static func extractExistingArtifactPath(from output: String) -> String? {
+        let pattern = #"already an? [^']+ at '([^']+)'"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return nil
+        }
+
+        let range = NSRange(output.startIndex..<output.endIndex, in: output)
+        guard let match = regex.firstMatch(in: output, options: [], range: range),
+              match.numberOfRanges > 1,
+              let pathRange = Range(match.range(at: 1), in: output) else {
+            return nil
+        }
+
+        return String(output[pathRange])
     }
 }
