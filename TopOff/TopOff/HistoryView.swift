@@ -70,9 +70,7 @@ struct HistoryView: View {
     }
 
     private func timeLabel(for event: UpdateResult) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        let timeString = formatter.string(from: event.timestamp)
+        let timeString = HistoryGrouping.timeTitle(for: event.timestamp)
         let count = event.packages.count
         return "\(timeString) · \(count) package\(count == 1 ? "" : "s")"
     }

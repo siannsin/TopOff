@@ -63,6 +63,31 @@ final class HistoryGroupingTests: XCTestCase {
         XCTAssertEqual(groups.first?.title, "3 June 2026")
     }
 
+    func testHistoryTimeTitlesFollowLocaleClock() {
+        let date = calendar.date(from: DateComponents(
+            year: 2026,
+            month: 6,
+            day: 3,
+            hour: 14,
+            minute: 5
+        ))!
+
+        let usTime = HistoryGrouping.timeTitle(
+            for: date,
+            calendar: calendar,
+            locale: Locale(identifier: "en_US")
+        )
+        let ukTime = HistoryGrouping.timeTitle(
+            for: date,
+            calendar: calendar,
+            locale: Locale(identifier: "en_GB")
+        )
+
+        XCTAssertTrue(usTime.contains("2:05"))
+        XCTAssertTrue(usTime.localizedCaseInsensitiveContains("PM"))
+        XCTAssertEqual(ukTime, "14:05")
+    }
+
     func testCrossYearGroupAppendsYear() {
         let oldDate = calendar.date(from: DateComponents(year: 2025, month: 11, day: 1, hour: 10, minute: 0))!
         let history = [

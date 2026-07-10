@@ -46,7 +46,7 @@ TopOff runs Homebrew from the menu bar so you can check outdated formulae and ca
 ## Usage
 
 1. Click the TopOff menu bar icon.
-2. Choose **Check for Updates** to refresh the list.
+2. Choose **Check Updates** to refresh the list.
 3. Choose **Update All** or update a single package.
 4. Open the menu during an update to see progress.
 

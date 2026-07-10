@@ -8,6 +8,19 @@ struct HistoryDayGroup: Identifiable {
 
 enum HistoryGrouping {
 
+    static func timeTitle(
+        for date: Date,
+        calendar: Calendar = .current,
+        locale: Locale = .current
+    ) -> String {
+        let formatter = DateFormatter()
+        formatter.calendar = calendar
+        formatter.locale = locale
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
     static func groupHistory(
         _ history: [UpdateResult],
         calendar: Calendar = .current,

@@ -144,6 +144,12 @@ final class MenuBarViewModel: ObservableObject {
     @Published var greedyModeEnabled: Bool {
         didSet {
             defaults.set(greedyModeEnabled, forKey: "greedyModeEnabled")
+            guard greedyModeEnabled != oldValue else { return }
+
+            outdatedPackages = []
+            skippedPackages = []
+            initialCheckSucceeded = false
+            updateIconState()
         }
     }
     @Published var rememberSkippedPackages: Bool {

@@ -305,9 +305,6 @@ final class BrewService: @unchecked Sendable {
             throw BrewError.brewNotFound
         }
 
-        // Run brew update
-        _ = try await runCommand(brewPath, arguments: ["update"])
-
         if let packageNames, packageNames.isEmpty {
             return UpdateResult(packages: [], timestamp: Date())
         }

@@ -150,6 +150,21 @@ final class MenuBarViewModelSkipListTests: XCTestCase {
         XCTAssertFalse(vm.greedyModeEnabled)
     }
 
+    func testChangingGreedyModeClearsStalePackageState() {
+        let vm = MenuBarViewModel(skipInitialChecks: true, defaults: defaults)
+        vm.outdatedPackages = [
+            OutdatedPackage(name: "chrome", currentVersion: "1", latestVersion: "2")
+        ]
+        vm.skippedPackages = ["chrome"]
+        vm.rememberedSkipList = ["persisted-package"]
+
+        vm.greedyModeEnabled = true
+
+        XCTAssertTrue(vm.outdatedPackages.isEmpty)
+        XCTAssertTrue(vm.skippedPackages.isEmpty)
+        XCTAssertEqual(vm.rememberedSkipList, ["persisted-package"])
+    }
+
     func testSelectingUnlockModeStopsPeriodicChecks() {
         defaults.set(AutomaticCheckMode.periodic.rawValue, forKey: AutomaticCheckMode.userDefaultsKey)
         defaults.set(3600.0, forKey: "checkInterval")

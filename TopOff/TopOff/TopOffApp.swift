@@ -149,6 +149,7 @@ struct TopOffApp: App {
                 Divider()
 
                 Toggle("Greedy Mode", isOn: $viewModel.greedyModeEnabled)
+                    .disabled(viewModel.isRunning)
                     .help("Includes apps with built-in auto-update in both checks and upgrades, such as Chrome, Slack, and VS Code.")
 
                 Divider()
