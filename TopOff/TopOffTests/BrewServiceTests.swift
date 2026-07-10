@@ -417,6 +417,17 @@ final class BrewServiceTests: XCTestCase {
         )
     }
 
+    func testPerPackageUpdateArgumentsFollowGreedySetting() {
+        XCTAssertEqual(
+            BrewService.packageUpgradeArguments(name: "raycast", greedy: false),
+            ["upgrade", "raycast"]
+        )
+        XCTAssertEqual(
+            BrewService.packageUpgradeArguments(name: "raycast", greedy: true),
+            ["upgrade", "--greedy", "raycast"]
+        )
+    }
+
     func testCleanupArgumentsKeepStandardCleanupAsDefault() {
         XCTAssertEqual(BrewService.cleanupArguments(deepPruneAll: false), ["cleanup"])
         XCTAssertEqual(BrewService.cleanupArguments(deepPruneAll: true), ["cleanup", "--prune=all"])

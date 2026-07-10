@@ -12,6 +12,22 @@ enum BrewError: Error, LocalizedError {
     case caskUnavailable(packageName: String?, output: String)
     case caskArtifactConflict(path: String?, output: String)
 
+    var diagnosticOutput: String {
+        switch self {
+        case .brewNotFound:
+            return "Homebrew executable was not found."
+        case .permissionDenied(let output),
+             .commandFailed(let output),
+             .networkUnavailable(let output),
+             .diskFull(let output),
+             .commandLineToolsRequired(let output),
+             .brewBusy(let output),
+             .caskUnavailable(_, let output),
+             .caskArtifactConflict(_, let output):
+            return output
+        }
+    }
+
     var errorDescription: String? {
         switch self {
         case .brewNotFound:
@@ -499,21 +515,21 @@ final class BrewService: @unchecked Sendable {
         return packages
     }
 
-    func upgradePackage(_ name: String) async throws -> UpdateResult {
+    func upgradePackage(_ name: String, greedy: Bool) async throws -> UpdateResult {
         guard let brewPath = brewPath else {
             throw BrewError.brewNotFound
         }
 
-        // Always pass `--greedy` for an explicit per-package upgrade. Casks
-        // marked `auto_updates true` (e.g. omnissa-horizon-client) are
-        // invisible to a plain `brew upgrade <name>` — brew says "nothing
-        // to do" because greedy casks are assumed to self-update. Per-row
-        // Update is an explicit user intent to upgrade *this* thing, so
-        // honor that even when TopOff's global Greedy mode is off. For
-        // formulae and non-auto_updates casks `--greedy` is a no-op.
-        let upgradeOutput = try await runCommand(brewPath, arguments: ["upgrade", "--greedy", name])
+        let upgradeOutput = try await runCommand(
+            brewPath,
+            arguments: Self.packageUpgradeArguments(name: name, greedy: greedy)
+        )
         let packages = Self.parseUpgradeOutput(upgradeOutput)
         return UpdateResult(packages: packages, timestamp: Date())
+    }
+
+    static func packageUpgradeArguments(name: String, greedy: Bool) -> [String] {
+        greedy ? ["upgrade", "--greedy", name] : ["upgrade", name]
     }
 
     func repairInterruptedCaskUpgrades(
@@ -964,15 +980,14 @@ final class BrewService: @unchecked Sendable {
         return UpdateResult(packages: packages, timestamp: Date())
     }
 
-    func upgradePackageWithAdmin(_ name: String) async throws -> UpdateResult {
+    func upgradePackageWithAdmin(_ name: String, greedy: Bool) async throws -> UpdateResult {
         guard let brewPath = brewPath else {
             throw BrewError.brewNotFound
         }
 
-        // See `upgradePackage` for why `--greedy` is unconditional here.
         let upgradeOutput = try await runCommandWithAdmin(
             brewPath,
-            arguments: ["upgrade", "--greedy", name],
+            arguments: Self.packageUpgradeArguments(name: name, greedy: greedy),
             packageName: name
         )
         let packages = Self.parseUpgradeOutput(upgradeOutput)

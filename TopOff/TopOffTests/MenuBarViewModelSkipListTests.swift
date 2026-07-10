@@ -135,12 +135,19 @@ final class MenuBarViewModelSkipListTests: XCTestCase {
         XCTAssertTrue(vm.shouldRunHomebrewCheck(now: now))
     }
 
-    func testGreedyOverrideForcesGreedyCheck() {
+    func testGreedyModeSettingPersistsAsSingleSourceOfTruth() {
         let vm = MenuBarViewModel(skipInitialChecks: true, defaults: defaults)
-        vm.greedyModeEnabled = false
+        vm.greedyModeEnabled = true
 
-        XCTAssertFalse(vm.resolvedGreedyMode(greedyOverride: nil))
-        XCTAssertTrue(vm.resolvedGreedyMode(greedyOverride: true))
+        XCTAssertTrue(defaults.bool(forKey: "greedyModeEnabled"))
+        XCTAssertTrue(vm.greedyModeEnabled)
+    }
+
+    func testGreedyModeDefaultsOffForNewUsers() {
+        let vm = MenuBarViewModel(skipInitialChecks: true, defaults: defaults)
+
+        XCTAssertFalse(MenuBarViewModel.defaultGreedyModeEnabled)
+        XCTAssertFalse(vm.greedyModeEnabled)
     }
 
     func testSelectingUnlockModeStopsPeriodicChecks() {

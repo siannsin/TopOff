@@ -12,7 +12,7 @@ struct TopOffApp: App {
         let viewModel = MenuBarViewModel()
         _viewModel = StateObject(wrappedValue: viewModel)
         NotificationActionRouter.shared.updateAllHandler = { [weak viewModel] in
-            viewModel?.updateAll(greedy: false)
+            viewModel?.updateAll()
         }
     }
 
@@ -57,11 +57,11 @@ struct TopOffApp: App {
 
             // Primary actions
             Button(viewModel.greedyModeEnabled ? "Update All (Greedy)" : "Update All") {
-                viewModel.updateAll(greedy: false)
+                viewModel.updateAll()
             }
             .disabled(viewModel.isRunning)
 
-            Button("Check for Updates") {
+            Button(viewModel.greedyModeEnabled ? "Check Updates (Greedy)" : "Check Updates") {
                 Task {
                     await viewModel.checkForUpdates()
                 }

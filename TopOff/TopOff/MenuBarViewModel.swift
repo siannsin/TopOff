@@ -95,6 +95,7 @@ final class MenuBarViewModel: ObservableObject {
     static let appUpdateCheckInterval: TimeInterval = 21_600
     static let unlockCheckDelay: TimeInterval = 60
     static let minimumHomebrewCheckInterval: TimeInterval = 14_400
+    static let defaultGreedyModeEnabled = false
 
     @Published var iconState: MenuBarIconState = .upToDate {
         didSet {
@@ -168,6 +169,7 @@ final class MenuBarViewModel: ObservableObject {
 
     private let defaults: UserDefaults
     private let loginItemManager: LaunchAtLoginManaging
+    private let errorLogStore: HomebrewErrorLogStore
     private let brewService = BrewService()
     private let updateChecker = UpdateChecker()
     private let notificationManager = NotificationManager.shared
@@ -185,10 +187,12 @@ final class MenuBarViewModel: ObservableObject {
     init(
         skipInitialChecks: Bool = false,
         defaults: UserDefaults = .standard,
-        loginItemManager: LaunchAtLoginManaging = SMAppServiceLaunchAtLogin()
+        loginItemManager: LaunchAtLoginManaging = SMAppServiceLaunchAtLogin(),
+        errorLogStore: HomebrewErrorLogStore? = nil
     ) {
         self.defaults = defaults
         self.loginItemManager = loginItemManager
+        self.errorLogStore = errorLogStore ?? .shared
         self.launchAtLogin = defaults.bool(forKey: "launchAtLogin")
         self.checkInterval = defaults.object(forKey: "checkInterval") as? TimeInterval ?? 14400
         self.automaticCheckMode = AutomaticCheckMode.stored(in: defaults)
@@ -199,7 +203,9 @@ final class MenuBarViewModel: ObservableObject {
             self.autoCleanupEnabled = defaults.bool(forKey: "autoCleanupEnabled")
         }
         self.autoCleanupStyle = AutoCleanupStyle.stored(in: defaults)
-        self.greedyModeEnabled = defaults.bool(forKey: "greedyModeEnabled")
+        self.greedyModeEnabled = defaults.object(forKey: "greedyModeEnabled") == nil
+            ? Self.defaultGreedyModeEnabled
+            : defaults.bool(forKey: "greedyModeEnabled")
         self.rememberSkippedPackages = defaults.bool(forKey: "rememberSkippedPackages")
         self.rememberedSkipList = Self.loadRememberedSkipList(from: defaults)
         spinnerFrames = Self.generateSpinnerFrames()
@@ -242,7 +248,7 @@ final class MenuBarViewModel: ObservableObject {
         initialCheckSucceeded && visibleOutdatedPackages.isEmpty && !isRunning
     }
 
-    func updateAll(greedy: Bool) {
+    func updateAll() {
         guard !isRunning else { return }
 
         Task {
@@ -250,7 +256,7 @@ final class MenuBarViewModel: ObservableObject {
             iconState = .checking
             statusMessage = "Checking for updates..."
             var packagesToUpdate: [OutdatedPackage] = []
-            let shouldUseGreedy = resolvedGreedyMode(greedyOverride: greedy)
+            let shouldUseGreedy = greedyModeEnabled
 
             do {
                 let refreshedOutdatedPackages = try await brewService.checkOutdated(greedy: shouldUseGreedy)
@@ -277,9 +283,7 @@ final class MenuBarViewModel: ObservableObject {
                 let completedResult = try await finalizeUpdateResult(result, greedy: shouldUseGreedy)
 
                 // Run cleanup if auto cleanup is enabled
-                if autoCleanupEnabled {
-                    lastCleanupResult = try? await runAutoCleanup()
-                }
+                await runAutoCleanupIfEnabled()
 
                 let remainingCount = visibleOutdatedPackages.count
                 if remainingCount == 0 {
@@ -297,9 +301,9 @@ final class MenuBarViewModel: ObservableObject {
                 notificationManager.showCompletionNotification(success: true, message: message)
                 updateProgress = nil
             } catch {
-                let errorOutput = extractErrorOutput(from: error)
-                let classified = BrewError.classify(output: errorOutput)
+                let classified = classifyBrewError(error)
                 if case .permissionDenied = classified {
+                    errorLogStore.record(operation: "updateAll.permissionTrigger", error: error)
                     do {
                         statusMessage = "Retrying with admin privileges..."
                         let result = try await performUpdates(
@@ -310,9 +314,7 @@ final class MenuBarViewModel: ObservableObject {
                         finishUpdateProgress()
                         let completedResult = try await finalizeUpdateResult(result, greedy: shouldUseGreedy)
 
-                        if autoCleanupEnabled {
-                            lastCleanupResult = try? await runAutoCleanup()
-                        }
+                        await runAutoCleanupIfEnabled()
 
                         let remainingCount = visibleOutdatedPackages.count
                         if remainingCount == 0 {
@@ -330,11 +332,21 @@ final class MenuBarViewModel: ObservableObject {
                         notificationManager.showCompletionNotification(success: true, message: message)
                         updateProgress = nil
                     } catch {
-                        let classified = await reconcileFailedUpdateAttempt(error, greedy: shouldUseGreedy)
+                        errorLogStore.record(operation: "updateAll.adminRetry", error: error)
+                        let classified = await reconcileFailedUpdateAttempt(
+                            error,
+                            greedy: shouldUseGreedy,
+                            verificationOperation: "updateAll.adminRetryVerification"
+                        )
                         notifyFailure(classified)
                     }
                 } else {
-                    let classified = await reconcileFailedUpdateAttempt(error, greedy: shouldUseGreedy)
+                    errorLogStore.record(operation: "updateAll", error: error)
+                    let classified = await reconcileFailedUpdateAttempt(
+                        error,
+                        greedy: shouldUseGreedy,
+                        verificationOperation: "updateAll.verification"
+                    )
                     notifyFailure(classified)
                 }
             }
@@ -350,9 +362,13 @@ final class MenuBarViewModel: ObservableObject {
             isRunning = true
             iconState = .updating
             statusMessage = "Updating \(package.name)..."
+            let shouldUseGreedy = greedyModeEnabled
 
             do {
-                let result = try await brewService.upgradePackage(package.name)
+                let result = try await brewService.upgradePackage(
+                    package.name,
+                    greedy: shouldUseGreedy
+                )
 
                 // Remove from outdated list
                 outdatedPackages.removeAll { $0.name == package.name }
@@ -370,9 +386,7 @@ final class MenuBarViewModel: ObservableObject {
                 addToHistory(result)
 
                 // Run cleanup if auto cleanup is enabled
-                if autoCleanupEnabled {
-                    lastCleanupResult = try? await runAutoCleanup()
-                }
+                await runAutoCleanupIfEnabled()
 
                 statusMessage = nil
                 updateIconState()
@@ -380,12 +394,18 @@ final class MenuBarViewModel: ObservableObject {
                 let message = "\(package.name) upgraded"
                 notificationManager.showCompletionNotification(success: true, message: message)
             } catch {
-                let errorOutput = extractErrorOutput(from: error)
-                let classified = BrewError.classify(output: errorOutput)
+                let classified = classifyBrewError(error)
                 if case .permissionDenied = classified {
+                    errorLogStore.record(
+                        operation: "upgradePackage.\(package.name).permissionTrigger",
+                        error: error
+                    )
                     do {
                         statusMessage = "Retrying \(package.name) with admin privileges..."
-                        let result = try await brewService.upgradePackageWithAdmin(package.name)
+                        let result = try await brewService.upgradePackageWithAdmin(
+                            package.name,
+                            greedy: shouldUseGreedy
+                        )
 
                         outdatedPackages.removeAll { $0.name == package.name }
                         skippedPackages.remove(package.name)
@@ -400,9 +420,7 @@ final class MenuBarViewModel: ObservableObject {
                         }
                         addToHistory(result)
 
-                        if autoCleanupEnabled {
-                            lastCleanupResult = try? await runAutoCleanup()
-                        }
+                        await runAutoCleanupIfEnabled()
 
                         statusMessage = nil
                         updateIconState()
@@ -410,11 +428,16 @@ final class MenuBarViewModel: ObservableObject {
                         let message = "\(package.name) upgraded"
                         notificationManager.showCompletionNotification(success: true, message: message)
                     } catch {
+                        errorLogStore.record(
+                            operation: "upgradePackage.\(package.name).adminRetry",
+                            error: error
+                        )
                         statusMessage = nil
                         updateIconState()
                         notifyFailure(error)
                     }
                 } else {
+                    errorLogStore.record(operation: "upgradePackage.\(package.name)", error: error)
                     statusMessage = nil
                     updateIconState()
                     notifyFailure(error)
@@ -453,6 +476,7 @@ final class MenuBarViewModel: ObservableObject {
                 }
                 notificationManager.showCompletionNotification(success: true, message: message)
             } catch {
+                errorLogStore.record(operation: "cleanup", error: error)
                 statusMessage = nil
                 notifyFailure(error, fallbackTitle: "Cleanup couldn't complete")
             }
@@ -477,7 +501,6 @@ final class MenuBarViewModel: ObservableObject {
 
     @discardableResult
     func checkForUpdates(
-        greedyOverride: Bool? = nil,
         respectMinimumInterval: Bool = false,
         notifyIfUpdatesAvailable: Bool = false
     ) async -> Bool {
@@ -493,8 +516,7 @@ final class MenuBarViewModel: ObservableObject {
 
         var success = false
         do {
-            let shouldCheckGreedy = resolvedGreedyMode(greedyOverride: greedyOverride)
-            let refreshedOutdatedPackages = try await brewService.checkOutdated(greedy: shouldCheckGreedy)
+            let refreshedOutdatedPackages = try await brewService.checkOutdated(greedy: greedyModeEnabled)
             outdatedPackages = refreshedOutdatedPackages
             skippedPackages = []
             updateIconState()
@@ -503,7 +525,9 @@ final class MenuBarViewModel: ObservableObject {
             }
             success = true
         } catch {
-            iconState = .upToDate
+            errorLogStore.record(operation: "checkForUpdates", error: error)
+            updateIconState()
+            notifyCheckFailure(classifyBrewError(error))
             print("Failed to check for updates: \(error)")
         }
 
@@ -517,10 +541,6 @@ final class MenuBarViewModel: ObservableObject {
             return true
         }
         return now.timeIntervalSince(lastCheck) >= Self.minimumHomebrewCheckInterval
-    }
-
-    func resolvedGreedyMode(greedyOverride: Bool?) -> Bool {
-        greedyOverride ?? greedyModeEnabled
     }
 
     var lastHomebrewCheckDate: Date? {
@@ -575,28 +595,36 @@ final class MenuBarViewModel: ObservableObject {
 
     private func extractErrorOutput(from error: Error) -> String {
         if let brewError = error as? BrewError {
-            switch brewError {
-            case .commandFailed(let output):
-                return output
-            case .permissionDenied(let output):
-                return output
-            case .brewNotFound:
-                return ""
-            case .networkUnavailable(let output):
-                return output
-            case .diskFull(let output):
-                return output
-            case .commandLineToolsRequired(let output):
-                return output
-            case .brewBusy(let output):
-                return output
-            case .caskUnavailable(_, let output):
-                return output
-            case .caskArtifactConflict(_, let output):
-                return output
-            }
+            return brewError.diagnosticOutput
         }
         return error.localizedDescription
+    }
+
+    private func classifyBrewError(_ error: Error) -> BrewError {
+        if let brewError = error as? BrewError {
+            switch brewError {
+            case .commandFailed, .permissionDenied:
+                return BrewError.classify(output: brewError.diagnosticOutput)
+            default:
+                return brewError
+            }
+        }
+        return BrewError.classify(output: error.localizedDescription)
+    }
+
+    private func notifyCheckFailure(_ error: BrewError) {
+        let summary = error.errorDescription ?? "Homebrew check failed"
+        let body: String
+        if let recovery = error.recoverySuggestion, !recovery.isEmpty {
+            body = "\(summary). \(recovery)"
+        } else {
+            body = summary
+        }
+        notificationManager.showCompletionNotification(
+            success: false,
+            title: "Update check failed",
+            body: body
+        )
     }
 
     private func notifyFailure(_ error: Error, fallbackTitle: String = "Update couldn't complete") {
@@ -633,6 +661,17 @@ final class MenuBarViewModel: ObservableObject {
     private func runAutoCleanup() async throws -> CleanupResult {
         statusMessage = autoCleanupStyle.deepPruneAll ? "Deep pruning Homebrew cache..." : "Cleaning up..."
         return try await brewService.cleanup(deepPruneAll: autoCleanupStyle.deepPruneAll)
+    }
+
+    private func runAutoCleanupIfEnabled() async {
+        guard autoCleanupEnabled else { return }
+
+        do {
+            lastCleanupResult = try await runAutoCleanup()
+        } catch {
+            errorLogStore.record(operation: "autoCleanup", error: error)
+            lastCleanupResult = nil
+        }
     }
 
     nonisolated static func uniquePackages(_ source: [OutdatedPackage]) -> [OutdatedPackage] {
@@ -756,9 +795,13 @@ final class MenuBarViewModel: ObservableObject {
         return completedResult
     }
 
-    private func reconcileFailedUpdateAttempt(_ error: Error, greedy: Bool) async -> BrewError {
+    private func reconcileFailedUpdateAttempt(
+        _ error: Error,
+        greedy: Bool,
+        verificationOperation: String
+    ) async -> BrewError {
         let output = extractErrorOutput(from: error)
-        let classified = BrewError.classify(output: output)
+        let classified = classifyBrewError(error)
         let parsedResult = UpdateResult(
             packages: BrewService.parseUpgradeOutput(output),
             timestamp: Date()
@@ -769,6 +812,7 @@ final class MenuBarViewModel: ObservableObject {
         do {
             _ = try await finalizeUpdateResult(parsedResult, greedy: greedy)
         } catch {
+            errorLogStore.record(operation: verificationOperation, error: error)
             // Keep the original upgrade error for the notification. A failed
             // verification should not hide the Homebrew failure the user can act on.
         }
@@ -895,7 +939,6 @@ final class MenuBarViewModel: ObservableObject {
     private func runUnlockTriggeredCheckIfNeeded() async {
         guard automaticCheckMode == .afterUnlock else { return }
         await checkForUpdates(
-            greedyOverride: nil,
             respectMinimumInterval: true,
             notifyIfUpdatesAvailable: true
         )

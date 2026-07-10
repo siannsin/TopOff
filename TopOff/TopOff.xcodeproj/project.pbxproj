@@ -27,6 +27,8 @@
 		AB5B4CA3CB11A98305FDF00A /* DisplayVersionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4CF3A0B84B985C4B3BE3D90 /* DisplayVersionTests.swift */; };
 		C5ABE3636DCEED4330162E0C /* DisplayVersion.swift in Sources */ = {isa = PBXBuildFile; fileRef = 602F71524F09E1230078D225 /* DisplayVersion.swift */; };
 		E7ADB7B4A926EB060F6E9A47 /* AdminPasswordPromptWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 18FD970D70069AC5CA2EA99B /* AdminPasswordPromptWindow.swift */; };
+		D31A00000000000000000001 /* HomebrewErrorLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31A00000000000000000003 /* HomebrewErrorLogStore.swift */; };
+		D31A00000000000000000002 /* HomebrewErrorLogStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D31A00000000000000000004 /* HomebrewErrorLogStoreTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -64,6 +66,8 @@
 		A7C5AE0699146D3EB24865A6 /* MenuBarViewModelSkipListTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MenuBarViewModelSkipListTests.swift; sourceTree = "<group>"; };
 		A8A2E360C5F57BAF9697D3B4 /* BrewError+Classification.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "BrewError+Classification.swift"; sourceTree = "<group>"; };
 		B4CF3A0B84B985C4B3BE3D90 /* DisplayVersionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DisplayVersionTests.swift; sourceTree = "<group>"; };
+		D31A00000000000000000003 /* HomebrewErrorLogStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HomebrewErrorLogStore.swift; sourceTree = "<group>"; };
+		D31A00000000000000000004 /* HomebrewErrorLogStoreTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = HomebrewErrorLogStoreTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -112,6 +116,7 @@
 				A8A2E360C5F57BAF9697D3B4 /* BrewError+Classification.swift */,
 				18FD970D70069AC5CA2EA99B /* AdminPasswordPromptWindow.swift */,
 				A1B6F8F7F3E364B160D91BFC /* HistoryGrouping.swift */,
+				D31A00000000000000000003 /* HomebrewErrorLogStore.swift */,
 			);
 			path = TopOff;
 			sourceTree = "<group>";
@@ -134,6 +139,7 @@
 				7E82337D72B586027C4FCC6C /* BrewErrorClassificationTests.swift */,
 				50ED517EFA5118084DB190DB /* AskpassScriptTests.swift */,
 				81102A6143014EBF0C9A9508 /* HistoryGroupingTests.swift */,
+				D31A00000000000000000004 /* HomebrewErrorLogStoreTests.swift */,
 			);
 			path = TopOffTests;
 			sourceTree = "<group>";
@@ -250,6 +256,7 @@
 				51FDFB24EAFDEFE9D1FDAA1A /* BrewError+Classification.swift in Sources */,
 				E7ADB7B4A926EB060F6E9A47 /* AdminPasswordPromptWindow.swift in Sources */,
 				2537D5CD9BDCC8E725557CEF /* HistoryGrouping.swift in Sources */,
+				D31A00000000000000000001 /* HomebrewErrorLogStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -263,6 +270,7 @@
 				4CA6D63D54CD9D41ADB88E4A /* BrewErrorClassificationTests.swift in Sources */,
 				7C2D0948902A531A21ADF198 /* AskpassScriptTests.swift in Sources */,
 				7561604DB435D5D45D3B71FE /* HistoryGroupingTests.swift in Sources */,
+				D31A00000000000000000002 /* HomebrewErrorLogStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
