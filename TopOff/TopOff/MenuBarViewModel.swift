@@ -372,7 +372,7 @@ final class MenuBarViewModel: ObservableObject {
 
             do {
                 let result = try await brewService.upgradePackage(
-                    package.name,
+                    package,
                     greedy: shouldUseGreedy
                 )
 
@@ -409,7 +409,7 @@ final class MenuBarViewModel: ObservableObject {
                     do {
                         statusMessage = "Retrying \(package.name) with admin privileges..."
                         let result = try await brewService.upgradePackageWithAdmin(
-                            package.name,
+                            package,
                             greedy: shouldUseGreedy
                         )
 
@@ -720,13 +720,13 @@ final class MenuBarViewModel: ObservableObject {
             if useAdmin {
                 result = try await brewService.updateAllWithAdmin(
                     greedy: greedy,
-                    packageNames: regularPackages.map(\.name),
+                    packages: regularPackages,
                     onProgress: progressHandler
                 )
             } else {
                 result = try await brewService.updateAll(
                     greedy: greedy,
-                    packageNames: regularPackages.map(\.name),
+                    packages: regularPackages,
                     onProgress: progressHandler
                 )
             }

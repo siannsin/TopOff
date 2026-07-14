@@ -298,18 +298,19 @@ final class BrewService: @unchecked Sendable {
 
     func updateAll(
         greedy: Bool = false,
-        packageNames: [String]? = nil,
+        packages: [OutdatedPackage],
         onProgress: (@Sendable (String) -> Void)? = nil
     ) async throws -> UpdateResult {
         guard let brewPath = brewPath else {
             throw BrewError.brewNotFound
         }
 
-        if let packageNames, packageNames.isEmpty {
+        guard !packages.isEmpty else {
             return UpdateResult(packages: [], timestamp: Date())
         }
 
         // Run regular upgrades first, then include greedy casks when requested.
+        let packageNames = packages.map(\.name)
         var upgradeOutputs: [String] = []
         for upgradeArgs in Self.upgradeArgumentBatches(greedy: greedy, packageNames: packageNames) {
             let output: String
@@ -321,9 +322,42 @@ final class BrewService: @unchecked Sendable {
             upgradeOutputs.append(output)
         }
 
-        // Parse the upgrade output to find upgraded packages
-        let packages = Self.parseUpgradeOutput(upgradeOutputs.joined(separator: "\n"))
-        return UpdateResult(packages: packages, timestamp: Date())
+        let combinedOutput = upgradeOutputs.joined(separator: "\n")
+        let upgradedPackages = Self.parseUpgradeOutput(combinedOutput)
+        let completedPackages = try await appendingReinstalledRefusedCasks(
+            to: upgradedPackages,
+            output: combinedOutput,
+            candidates: packages,
+            useAdmin: false,
+            onProgress: onProgress
+        )
+        return UpdateResult(packages: completedPackages, timestamp: Date())
+    }
+
+    /// Homebrew can list self-updating casks as outdated while refusing to
+    /// upgrade them in place. It prints an exact forced-reinstall instruction
+    /// for those casks; only names from that warning are returned here.
+    nonisolated static func casksNeedingReinstall(from output: String) -> [String] {
+        var names: [String] = []
+        var seen = Set<String>()
+
+        for line in output.components(separatedBy: .newlines) {
+            guard line.contains("cannot be upgraded as-is"),
+                  let openingQuote = line.range(of: "The cask '"),
+                  let closingQuote = line.range(
+                      of: "'",
+                      range: openingQuote.upperBound..<line.endIndex
+                  ) else {
+                continue
+            }
+
+            let name = String(line[openingQuote.upperBound..<closingQuote.lowerBound])
+            if !name.isEmpty, seen.insert(name).inserted {
+                names.append(name)
+            }
+        }
+
+        return names
     }
 
     static func upgradeArgumentBatches(greedy: Bool, packageNames: [String]? = nil) -> [[String]] {
@@ -512,17 +546,24 @@ final class BrewService: @unchecked Sendable {
         return packages
     }
 
-    func upgradePackage(_ name: String, greedy: Bool) async throws -> UpdateResult {
+    func upgradePackage(_ package: OutdatedPackage, greedy: Bool) async throws -> UpdateResult {
         guard let brewPath = brewPath else {
             throw BrewError.brewNotFound
         }
 
         let upgradeOutput = try await runCommand(
             brewPath,
-            arguments: Self.packageUpgradeArguments(name: name, greedy: greedy)
+            arguments: Self.packageUpgradeArguments(name: package.name, greedy: greedy)
         )
-        let packages = Self.parseUpgradeOutput(upgradeOutput)
-        return UpdateResult(packages: packages, timestamp: Date())
+        let upgradedPackages = Self.parseUpgradeOutput(upgradeOutput)
+        let completedPackages = try await appendingReinstalledRefusedCasks(
+            to: upgradedPackages,
+            output: upgradeOutput,
+            candidates: [package],
+            useAdmin: false,
+            onProgress: nil
+        )
+        return UpdateResult(packages: completedPackages, timestamp: Date())
     }
 
     static func packageUpgradeArguments(name: String, greedy: Bool) -> [String] {
@@ -578,6 +619,60 @@ final class BrewService: @unchecked Sendable {
         }
 
         return UpdateResult(packages: repairedPackages, timestamp: Date())
+    }
+
+    private func reinstallRefusedCasks(
+        _ packages: [OutdatedPackage],
+        useAdmin: Bool,
+        onProgress: (@Sendable (String) -> Void)?
+    ) async throws -> [UpgradedPackage] {
+        guard let brewPath = brewPath else {
+            throw BrewError.brewNotFound
+        }
+
+        var reinstalledPackages: [UpgradedPackage] = []
+        for package in packages {
+            // Reuse the normal progress parser so the existing menu progress
+            // state tracks the fallback without introducing another state.
+            onProgress?("==> Upgrading \(package.name)")
+            _ = try await runCommandStreamingIfNeeded(
+                brewPath,
+                arguments: ["reinstall", "--cask", "--force", package.name],
+                useAdmin: useAdmin,
+                onProgress: onProgress
+            )
+            reinstalledPackages.append(UpgradedPackage(
+                name: package.name,
+                oldVersion: package.currentVersion,
+                newVersion: package.latestVersion
+            ))
+        }
+
+        return reinstalledPackages
+    }
+
+    private func appendingReinstalledRefusedCasks(
+        to upgradedPackages: [UpgradedPackage],
+        output: String,
+        candidates: [OutdatedPackage],
+        useAdmin: Bool,
+        onProgress: (@Sendable (String) -> Void)?
+    ) async throws -> [UpgradedPackage] {
+        let refusedNames = Set(Self.casksNeedingReinstall(from: output))
+        let refusedPackages = candidates.filter { refusedNames.contains($0.name) }
+        guard !refusedPackages.isEmpty else { return upgradedPackages }
+
+        let reinstalledPackages = try await reinstallRefusedCasks(
+            refusedPackages,
+            useAdmin: useAdmin,
+            onProgress: onProgress
+        )
+
+        // A refused cask may already have produced an "Upgrading" progress
+        // line. Replace any parsed placeholder with the verified metadata used
+        // for the reinstall so history contains one accurate entry.
+        let reinstalledNames = Set(reinstalledPackages.map(\.name))
+        return upgradedPackages.filter { !reinstalledNames.contains($0.name) } + reinstalledPackages
     }
 
     nonisolated static func staleCaskUpgradeBackupPaths(
@@ -951,17 +1046,18 @@ final class BrewService: @unchecked Sendable {
 
     func updateAllWithAdmin(
         greedy: Bool = false,
-        packageNames: [String]? = nil,
+        packages: [OutdatedPackage],
         onProgress: (@Sendable (String) -> Void)? = nil
     ) async throws -> UpdateResult {
         guard let brewPath = brewPath else {
             throw BrewError.brewNotFound
         }
 
-        if let packageNames, packageNames.isEmpty {
+        guard !packages.isEmpty else {
             return UpdateResult(packages: [], timestamp: Date())
         }
 
+        let packageNames = packages.map(\.name)
         var upgradeOutputs: [String] = []
         for upgradeArgs in Self.upgradeArgumentBatches(greedy: greedy, packageNames: packageNames) {
             let output = try await runCommandWithAdmin(
@@ -973,22 +1069,37 @@ final class BrewService: @unchecked Sendable {
             upgradeOutputs.append(output)
         }
 
-        let packages = Self.parseUpgradeOutput(upgradeOutputs.joined(separator: "\n"))
-        return UpdateResult(packages: packages, timestamp: Date())
+        let combinedOutput = upgradeOutputs.joined(separator: "\n")
+        let upgradedPackages = Self.parseUpgradeOutput(combinedOutput)
+        let completedPackages = try await appendingReinstalledRefusedCasks(
+            to: upgradedPackages,
+            output: combinedOutput,
+            candidates: packages,
+            useAdmin: true,
+            onProgress: onProgress
+        )
+        return UpdateResult(packages: completedPackages, timestamp: Date())
     }
 
-    func upgradePackageWithAdmin(_ name: String, greedy: Bool) async throws -> UpdateResult {
+    func upgradePackageWithAdmin(_ package: OutdatedPackage, greedy: Bool) async throws -> UpdateResult {
         guard let brewPath = brewPath else {
             throw BrewError.brewNotFound
         }
 
         let upgradeOutput = try await runCommandWithAdmin(
             brewPath,
-            arguments: Self.packageUpgradeArguments(name: name, greedy: greedy),
-            packageName: name
+            arguments: Self.packageUpgradeArguments(name: package.name, greedy: greedy),
+            packageName: package.name
         )
-        let packages = Self.parseUpgradeOutput(upgradeOutput)
-        return UpdateResult(packages: packages, timestamp: Date())
+        let upgradedPackages = Self.parseUpgradeOutput(upgradeOutput)
+        let completedPackages = try await appendingReinstalledRefusedCasks(
+            to: upgradedPackages,
+            output: upgradeOutput,
+            candidates: [package],
+            useAdmin: true,
+            onProgress: nil
+        )
+        return UpdateResult(packages: completedPackages, timestamp: Date())
     }
 
     // MARK: - Askpass / FIFO

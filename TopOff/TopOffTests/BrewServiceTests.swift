@@ -157,6 +157,40 @@ final class BrewServiceTests: XCTestCase {
         XCTAssertFalse(packages.contains { $0.newVersion == "?" }, "no '?' duplicate entries")
     }
 
+    func testCasksNeedingReinstallExtractsRefusedCaskNames() {
+        let output = """
+        ==> Upgrading lame
+        Warning: The cask 'google-chrome' cannot be upgraded as-is. To fix this, run:
+        brew reinstall --cask --force google-chrome
+        Warning: The cask 'duckduckgo' cannot be upgraded as-is. To fix this, run:
+        brew reinstall --cask --force duckduckgo
+        """
+
+        XCTAssertEqual(
+            BrewService.casksNeedingReinstall(from: output),
+            ["google-chrome", "duckduckgo"]
+        )
+    }
+
+    func testCasksNeedingReinstallDeduplicatesRepeatedWarnings() {
+        let output = """
+        Warning: The cask 'duckduckgo' cannot be upgraded as-is. To fix this, run:
+        Warning: The cask 'duckduckgo' cannot be upgraded as-is. To fix this, run:
+        """
+
+        XCTAssertEqual(BrewService.casksNeedingReinstall(from: output), ["duckduckgo"])
+    }
+
+    func testCasksNeedingReinstallIgnoresUnrelatedAndMalformedOutput() {
+        let output = """
+        ==> Upgrading 1 outdated package:
+        lame 3.100 -> 3.101
+        Warning: A cask cannot be upgraded as-is.
+        """
+
+        XCTAssertTrue(BrewService.casksNeedingReinstall(from: output).isEmpty)
+    }
+
     func testUpgradingPackageNameIgnoresSummaryLines() {
         XCTAssertNil(BrewService.upgradingPackageName(from: "==> Upgrading 3 outdated packages:"))
         XCTAssertEqual(
